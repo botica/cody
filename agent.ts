@@ -1,3 +1,4 @@
+// oh man, whats for dinner??
 import OpenAI from "openai";
 import * as fs from "fs";
 import * as readline from "readline";
