@@ -9,113 +9,101 @@ client = OpenAI()
 tools = [
     {
         "type": "function",
-        "function": {
-            "name": "read_file",
-            "description": "Read the contents of a file",
-            "parameters": {
-                "type": "object",
-                "properties": {"path": {"type": "string"}},
-                "required": ["path"]
-            }
+        "name": "read_file",
+        "description": "Read the contents of a file",
+        "parameters": {
+            "type": "object",
+            "properties": {"path": {"type": "string"}},
+            "required": ["path"]
         }
     },
     {
         "type": "function",
-        "function": {
-            "name": "list_directory",
-            "description": "List files and directories in a path",
-            "parameters": {
-                "type": "object",
-                "properties": {"path": {"type": "string"}}
-            }
+        "name": "list_directory",
+        "description": "List files and directories in a path",
+        "parameters": {
+            "type": "object",
+            "properties": {"path": {"type": "string"}}
         }
     },
     {
         "type": "function",
-        "function": {
-            "name": "search",
-            "description": "Search for a pattern in files. Returns matching lines with file paths and line numbers.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "pattern": {
-                        "type": "string",
-                        "description": "The regex pattern to search for"
-                    },
-                    "path": {
-                        "type": "string",
-                        "description": "Directory to search in (default: current directory)"
-                    },
-                    "file_pattern": {
-                        "type": "string",
-                        "description": "Glob pattern for files to search (e.g., '*.py', '*.txt')"
-                    }
+        "name": "search",
+        "description": "Search for a pattern in files. Returns matching lines with file paths and line numbers.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "pattern": {
+                    "type": "string",
+                    "description": "The regex pattern to search for"
                 },
-                "required": ["pattern"]
-            }
+                "path": {
+                    "type": "string",
+                    "description": "Directory to search in (default: current directory)"
+                },
+                "file_pattern": {
+                    "type": "string",
+                    "description": "Glob pattern for files to search (e.g., '*.py', '*.txt')"
+                }
+            },
+            "required": ["pattern"]
         }
     },
     {
         "type": "function",
-        "function": {
-            "name": "write_file",
-            "description": "Create a new file or overwrite an existing file with content",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Path to the file to create/overwrite"
-                    },
-                    "content": {
-                        "type": "string",
-                        "description": "Content to write to the file"
-                    }
+        "name": "write_file",
+        "description": "Create a new file or overwrite an existing file with content",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Path to the file to create/overwrite"
                 },
-                "required": ["path", "content"]
-            }
+                "content": {
+                    "type": "string",
+                    "description": "Content to write to the file"
+                }
+            },
+            "required": ["path", "content"]
         }
     },
     {
         "type": "function",
-        "function": {
-            "name": "edit_file",
-            "description": "Edit a file by replacing a specific string with new content. The old_string must match exactly.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Path to the file to edit"
-                    },
-                    "old_string": {
-                        "type": "string",
-                        "description": "The exact string to find and replace"
-                    },
-                    "new_string": {
-                        "type": "string",
-                        "description": "The string to replace it with"
-                    }
+        "name": "edit_file",
+        "description": "Edit a file by replacing a specific string with new content. The old_string must match exactly.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Path to the file to edit"
                 },
-                "required": ["path", "old_string", "new_string"]
-            }
+                "old_string": {
+                    "type": "string",
+                    "description": "The exact string to find and replace"
+                },
+                "new_string": {
+                    "type": "string",
+                    "description": "The string to replace it with"
+                }
+            },
+            "required": ["path", "old_string", "new_string"]
         }
     },
     {
         "type": "function",
-        "function": {
-            "name": "delete_file",
-            "description": "Delete a file or empty directory",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Path to the file or empty directory to delete"
-                    }
-                },
-                "required": ["path"]
-            }
+        "name": "delete_file",
+        "description": "Delete a file or empty directory",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Path to the file or empty directory to delete"
+                }
+            },
+            "required": ["path"]
         }
     }
 ]
@@ -223,51 +211,107 @@ def delete_file(path):
         return f"Error deleting: {e}"
 
 
-def run(prompt):
-    messages = [{"role": "user", "content": prompt}]
+def execute_tool(name, args):
+    if name == "read_file":
+        return read_file(args["path"])
+    elif name == "list_directory":
+        return list_directory(args.get("path", "."))
+    elif name == "search":
+        return search(
+            args["pattern"],
+            args.get("path", "."),
+            args.get("file_pattern")
+        )
+    elif name == "write_file":
+        return write_file(args["path"], args["content"])
+    elif name == "edit_file":
+        return edit_file(args["path"], args["old_string"], args["new_string"])
+    elif name == "delete_file":
+        return delete_file(args["path"])
+    return f"Unknown tool: {name}"
+
+
+def run(prompt, conversation=None):
+    if conversation is None:
+        conversation = []
+    conversation.append({"role": "user", "content": prompt})
+    messages = conversation
 
     while True:
-        response = client.chat.completions.create(
-            model="gpt-4o", messages=messages, tools=tools
+        stream = client.responses.create(
+            model="gpt-5.2",
+            input=messages,
+            tools=tools,
+            reasoning={"effort": "medium"},
+            text={"verbosity": "low"},
+            stream=True
         )
-        msg = response.choices[0].message
 
-        if not msg.tool_calls:
-            print(msg.content)
+        tool_calls = []
+        current_text = ""
+        pending_calls = {}  # track call info by item_id
+
+        for event in stream:
+            if event.type == "response.output_item.added":
+                item = event.item
+                if item.type == "function_call":
+                    print(f"[{item.name}] ...", end="", flush=True)
+                    pending_calls[item.id] = {
+                        "call_id": item.call_id,
+                        "name": item.name
+                    }
+            elif event.type == "response.function_call_arguments.done":
+                # Function call complete, execute it
+                call_info = pending_calls.get(event.item_id, {})
+                name = call_info.get("name", "unknown")
+                call_id = call_info.get("call_id", event.item_id)
+
+                args = json.loads(event.arguments)
+                print(f"\r[{name}] {args}")
+
+                result = execute_tool(name, args)
+                print(f"  -> {result[:100]}{'...' if len(result) > 100 else ''}\n")
+
+                tool_calls.append({
+                    "call_id": call_id,
+                    "name": name,
+                    "arguments": event.arguments,
+                    "result": result
+                })
+            elif event.type == "response.output_text.delta":
+                print(event.delta, end="", flush=True)
+                current_text += event.delta
+            elif event.type == "response.output_text.done":
+                if current_text:
+                    print()  # newline after text
+
+        if not tool_calls:
+            # Save assistant response to conversation
+            if current_text:
+                messages.append({"role": "assistant", "content": current_text})
             break
 
-        messages.append(msg)
-        for tc in msg.tool_calls:
-            name = tc.function.name
-            args = json.loads(tc.function.arguments)
-            print(f"[{name}] {args}")
-
-            if name == "read_file":
-                result = read_file(args["path"])
-            elif name == "list_directory":
-                result = list_directory(args.get("path", "."))
-            elif name == "search":
-                result = search(
-                    args["pattern"],
-                    args.get("path", "."),
-                    args.get("file_pattern")
-                )
-            elif name == "write_file":
-                result = write_file(args["path"], args["content"])
-            elif name == "edit_file":
-                result = edit_file(args["path"], args["old_string"], args["new_string"])
-            elif name == "delete_file":
-                result = delete_file(args["path"])
-
-            print(f"  -> {result[:100]}{'...' if len(result) > 100 else ''}\n")
-            messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
+        # Add function calls and results to messages
+        for tc in tool_calls:
+            messages.append({
+                "type": "function_call",
+                "call_id": tc["call_id"],
+                "name": tc["name"],
+                "arguments": tc["arguments"]
+            })
+            messages.append({
+                "type": "function_call_output",
+                "call_id": tc["call_id"],
+                "output": tc["result"]
+            })
 
 
 if __name__ == "__main__":
+    conversation = []
     while True:
         try:
             prompt = input("> ")
             if prompt.strip():
-                run(prompt)
+                run(prompt, conversation)
         except (KeyboardInterrupt, EOFError):
             break
