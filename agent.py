@@ -231,16 +231,13 @@ def execute_tool(name, args):
     return f"Unknown tool: {name}"
 
 
-def run(prompt, conversation=None):
-    if conversation is None:
-        conversation = []
+def run(prompt, conversation):
     conversation.append({"role": "user", "content": prompt})
-    messages = conversation
 
     while True:
         stream = client.responses.create(
             model="gpt-5.2",
-            input=messages,
+            input=conversation,
             tools=tools,
             reasoning={"effort": "medium"},
             text={"verbosity": "low"},
@@ -288,18 +285,17 @@ def run(prompt, conversation=None):
         if not tool_calls:
             # Save assistant response to conversation
             if current_text:
-                messages.append({"role": "assistant", "content": current_text})
+                conversation.append({"role": "assistant", "content": current_text})
             break
 
-        # Add function calls and results to messages
         for tc in tool_calls:
-            messages.append({
+            conversation.append({
                 "type": "function_call",
                 "call_id": tc["call_id"],
                 "name": tc["name"],
                 "arguments": tc["arguments"]
             })
-            messages.append({
+            conversation.append({
                 "type": "function_call_output",
                 "call_id": tc["call_id"],
                 "output": tc["result"]
