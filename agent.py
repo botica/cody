@@ -119,7 +119,7 @@ tools = [
 
 def read_file(path: str) -> str:
     try:
-        with open(path, encoding="utf-8") as f:
+        with open(path, encoding="utf-8", errors="replace") as f:
             return f.read()
     except FileNotFoundError:
         return f"Error: File not found: {path}"
@@ -129,7 +129,7 @@ def read_file(path: str) -> str:
 
 def list_directory(path: str = ".") -> str:
     try:
-        return "\n".join(os.listdir(path or "."))
+        return "\n".join(os.listdir(path))
     except FileNotFoundError:
         return f"Error: Directory not found: {path}"
     except Exception as e:
@@ -138,12 +138,11 @@ def list_directory(path: str = ".") -> str:
 
 def search(pattern: str, path: str = ".", file_pattern: str | None = None) -> str:
     try:
-        rg_bin = os.environ.get("RIPGREP_BIN") or "rg"
-        cmd = [rg_bin, pattern, path, "--color=never", "--max-count=50"]
+        cmd = ["rg", pattern, path, "--color=never", "--max-count=50"]
         if file_pattern:
             cmd.extend(["-g", file_pattern])
 
-        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=10)
+        result = subprocess.run(cmd, capture_output=True, encoding="utf-8", timeout=10)
 
         if result.returncode == 0:
             return result.stdout.strip()
@@ -221,19 +220,23 @@ def confirm_action(name: str, args: dict) -> bool:
 
 
 def execute_tool(name: str, args: dict) -> str:
-    if name in CONFIRM_TOOLS:
-        if not confirm_action(name, args):
-            return f"Action cancelled by user"
+    if name in CONFIRM_TOOLS and not confirm_action(name, args):
+        return "Action cancelled by user"
 
-    tools_map = {
-        "read_file": lambda: read_file(args["path"]),
-        "list_directory": lambda: list_directory(args.get("path", ".")),
-        "search": lambda: search(args["pattern"], args.get("path", "."), args.get("file_pattern")),
-        "write_file": lambda: write_file(args["path"], args["content"]),
-        "edit_file": lambda: edit_file(args["path"], args["old_string"], args["new_string"]),
-        "delete_file": lambda: delete_file(args["path"]),
-    }
-    return tools_map.get(name, lambda: f"Unknown tool: {name}")()
+    if name == "read_file":
+        return read_file(args["path"])
+    elif name == "list_directory":
+        return list_directory(args.get("path", "."))
+    elif name == "search":
+        return search(args["pattern"], args.get("path", "."), args.get("file_pattern"))
+    elif name == "write_file":
+        return write_file(args["path"], args["content"])
+    elif name == "edit_file":
+        return edit_file(args["path"], args["old_string"], args["new_string"])
+    elif name == "delete_file":
+        return delete_file(args["path"])
+    else:
+        return f"Unknown tool: {name}"
 
 
 def run(prompt: str, conversation: list) -> None:
