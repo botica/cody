@@ -1,8 +1,9 @@
 import json
 import os
-import re
+import subprocess
 from pathlib import Path
 from openai import OpenAI
+#add cd, tar, cat
 
 client = OpenAI()
 
@@ -20,7 +21,7 @@ tools = [
     {
         "type": "function",
         "name": "list_directory",
-        "description": "List files and directories in a path",
+        "description": "List files and directories in a path. If no path specified, use the current directory ('.').",
         "parameters": {
             "type": "object",
             "properties": {"path": {"type": "string"}}
@@ -29,7 +30,7 @@ tools = [
     {
         "type": "function",
         "name": "search",
-        "description": "Search for a pattern in files. Returns matching lines with file paths and line numbers.",
+        "description": "Search for a pattern in files and return matching lines with file paths and line numbers. If no path specified, search the current directory ('.').",
         "parameters": {
             "type": "object",
             "properties": {
@@ -131,36 +132,25 @@ def list_directory(path="."):
 
 
 def search(pattern, path=".", file_pattern=None):
-    results = []
-    root = Path(path)
-
-    if file_pattern:
-        files = root.rglob(file_pattern)
-    else:
-        files = root.rglob("*")
-
     try:
-        regex = re.compile(pattern, re.IGNORECASE)
-    except re.error as e:
-        return f"Invalid regex pattern: {e}"
+        cmd = ["rg.exe", pattern, path, "--color=never", "--max-count=50"]
+        if file_pattern:
+            cmd.extend(["-g", file_pattern])
 
-    for file_path in files:
-        if not file_path.is_file():
-            continue
-        try:
-            with open(file_path, encoding="utf-8", errors="ignore") as f:
-                for line_num, line in enumerate(f, 1):
-                    if regex.search(line):
-                        results.append(f"{file_path}:{line_num}: {line.rstrip()}")
-                        if len(results) >= 50:
-                            results.append("... (truncated, more results available)")
-                            return "\n".join(results)
-        except (PermissionError, OSError):
-            continue
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=10)
 
-    if not results:
-        return "No matches found"
-    return "\n".join(results)
+        if result.returncode == 0:
+            return result.stdout.strip()
+        elif result.returncode == 1:
+            return "No matches found"
+        else:
+            return f"Search error: {result.stderr}"
+    except FileNotFoundError:
+        return "Error: ripgrep (rg) is not installed. Install it to use the search tool."
+    except subprocess.TimeoutExpired:
+        return "Error: Search timed out"
+    except Exception as e:
+        return f"Error: {e}"
 
 
 def write_file(path, content):
@@ -303,7 +293,12 @@ def run(prompt, conversation):
 
 
 if __name__ == "__main__":
-    conversation = []
+    conversation = [
+        {
+            "role": "system",
+            "content": "You are an AI agent named Cody Banks. Your goal is to assist the user with coding tasks and other requests. You have actionable tools available—use them freely and proactively without hesitation. If you need to explore the filesystem, search directories (current, nested, or parent), list directory contents, or read files to understand the codebase, do so. If you're curious about a file, read it. Don't wait for explicit instructions to use tools."
+        }
+    ]
     while True:
         try:
             prompt = input("> ")
