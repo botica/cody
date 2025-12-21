@@ -113,6 +113,25 @@ tools = [
             },
             "required": ["path"]
         }
+    },
+    {
+        "type": "function",
+        "name": "fetch_webpage",
+        "description": "Fetch a webpage and extract its text content. Use use_browser=true for JavaScript-heavy sites.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "The URL to fetch"
+                },
+                "use_browser": {
+                    "type": "boolean",
+                    "description": "Use headless browser (Playwright) for JS-rendered content. Default: false"
+                }
+            },
+            "required": ["url"]
+        }
     }
 ]
 
@@ -206,17 +225,49 @@ def delete_file(path: str) -> str:
         return f"Error deleting: {e}"
 
 
-CONFIRM_TOOLS = {"write_file", "edit_file", "delete_file"}
+def fetch_webpage(url: str, use_browser: bool = False) -> str:
+    try:
+        if use_browser:
+            from playwright.sync_api import sync_playwright
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page()
+                page.goto(url, timeout=30000)
+                page.wait_for_load_state("networkidle")
+                text = page.inner_text("body")
+                browser.close()
+        else:
+            import requests
+            from bs4 import BeautifulSoup
+            response = requests.get(url, timeout=15, headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            })
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, "html.parser")
+            for tag in soup(["script", "style", "nav", "footer", "header"]):
+                tag.decompose()
+            text = soup.get_text(separator="\n", strip=True)
+
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        text = "\n".join(lines)
+        if len(text) > 15000:
+            text = text[:15000] + "\n...[truncated]"
+        return text
+    except Exception as e:
+        return f"Error fetching {url}: {e}"
+
+
+CONFIRM_TOOLS = {"write_file", "edit_file", "delete_file", "fetch_webpage"}
 
 
 def confirm_action(name: str, args: dict) -> bool:
     """Prompt user to confirm destructive actions. Returns True if confirmed."""
-    path = args.get("path", "unknown")
-
     if name == "edit_file":
-        detail = f"'{path}' (replacing '{args.get('old_string', '')}')"
+        detail = f"'{args.get('path')}' (replacing '{args.get('old_string', '')}')"
+    elif name == "fetch_webpage":
+        detail = f"'{args.get('url')}'"
     else:
-        detail = f"'{path}'"
+        detail = f"'{args.get('path', 'unknown')}'"
 
     print(f"\n  Confirm {name} {detail}? [y/N] ", end="", flush=True)
     try:
@@ -242,6 +293,8 @@ def execute_tool(name: str, args: dict) -> str:
         return edit_file(args["path"], args["old_string"], args["new_string"])
     elif name == "delete_file":
         return delete_file(args["path"])
+    elif name == "fetch_webpage":
+        return fetch_webpage(args["url"], args.get("use_browser", False))
     else:
         return f"Unknown tool: {name}"
 
