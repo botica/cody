@@ -5,11 +5,11 @@ from pathlib import Path
 from openai import OpenAI
 
 SYSTEM_PROMPT = '''
-You are an AI agent named Cody Banks. Your goal is to assist the user with coding tasks and other
+You are an AI agent named Cody. Your goal is to assist the user with coding tasks and other
 requests. You have actionable tools available—use them freely and proactively without hesitation.
-If you need to explore the filesystem, search directories (current, nested, or parent), list
+If you need to explore the filesystem, search directories, list
 directory contents, or read files to understand the codebase, do so. If you're curious about a
-file, read it. Don't wait for explicit instructions to use tools.
+file, read it.
 '''.strip()
 
 client = OpenAI()
@@ -138,7 +138,8 @@ def list_directory(path: str = ".") -> str:
 
 def search(pattern: str, path: str = ".", file_pattern: str | None = None) -> str:
     try:
-        cmd = ["rg.exe", pattern, path, "--color=never", "--max-count=50"]
+        rg_bin = os.environ.get("RIPGREP_BIN") or "rg"
+        cmd = [rg_bin, pattern, path, "--color=never", "--max-count=50"]
         if file_pattern:
             cmd.extend(["-g", file_pattern])
 
@@ -151,7 +152,7 @@ def search(pattern: str, path: str = ".", file_pattern: str | None = None) -> st
         else:
             return f"Search error: {result.stderr}"
     except FileNotFoundError:
-        return "Error: ripgrep (rg) is not installed."
+        return "Error: ripgrep (rg) is not installed or not on PATH."
     except subprocess.TimeoutExpired:
         return "Error: Search timed out"
     except Exception as e:
@@ -206,7 +207,24 @@ def delete_file(path: str) -> str:
         return f"Error deleting: {e}"
 
 
+CONFIRM_TOOLS = {"write_file", "edit_file", "delete_file"}
+
+
+def confirm_action(name: str, args: dict) -> bool:
+    """Prompt user to confirm destructive actions. Returns True if confirmed."""
+    print(f"\n  Confirm {name}? [y/N] ", end="", flush=True)
+    try:
+        response = input().strip().lower()
+        return response in ("y", "yes")
+    except (KeyboardInterrupt, EOFError):
+        return False
+
+
 def execute_tool(name: str, args: dict) -> str:
+    if name in CONFIRM_TOOLS:
+        if not confirm_action(name, args):
+            return f"Action cancelled by user"
+
     tools_map = {
         "read_file": lambda: read_file(args["path"]),
         "list_directory": lambda: list_directory(args.get("path", ".")),
@@ -265,7 +283,7 @@ def run(prompt: str, conversation: list) -> None:
                     current_text += event.delta
 
                 case "response.output_text.done" if current_text:
-                    print()
+                    print('-------------------------')
 
         if not tool_calls:
             if current_text:
