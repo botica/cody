@@ -132,6 +132,21 @@ tools = [
             },
             "required": ["url"]
         }
+    },
+    {
+        "type": "function",
+        "name": "web_search",
+        "description": "Search the web using DuckDuckGo. Returns titles, URLs, and snippets of search results.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The search query"
+                }
+            },
+            "required": ["query"]
+        }
     }
 ]
 
@@ -257,7 +272,40 @@ def fetch_webpage(url: str, use_browser: bool = False) -> str:
         return f"Error fetching {url}: {e}"
 
 
-CONFIRM_TOOLS = {"write_file", "edit_file", "delete_file", "fetch_webpage"}
+def web_search(query: str) -> str:
+    try:
+        import requests
+        from bs4 import BeautifulSoup
+        from urllib.parse import quote_plus
+
+        url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
+        response = requests.get(url, timeout=15, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        })
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, "html.parser")
+        results = []
+
+        for result in soup.select(".result")[:10]:
+            title_elem = result.select_one(".result__title a")
+            snippet_elem = result.select_one(".result__snippet")
+
+            if title_elem:
+                title = title_elem.get_text(strip=True)
+                href = title_elem.get("href", "")
+                snippet = snippet_elem.get_text(strip=True) if snippet_elem else ""
+                results.append(f"- {title}\n  {href}\n  {snippet}")
+
+        if not results:
+            return "No search results found."
+
+        return "\n\n".join(results)
+    except Exception as e:
+        return f"Error searching: {e}"
+
+
+CONFIRM_TOOLS = {"write_file", "edit_file", "delete_file", "fetch_webpage", "web_search"}
 
 
 def confirm_action(name: str, args: dict) -> bool:
@@ -266,6 +314,8 @@ def confirm_action(name: str, args: dict) -> bool:
         detail = f"'{args.get('path')}' (replacing '{args.get('old_string', '')}')"
     elif name == "fetch_webpage":
         detail = f"'{args.get('url')}'"
+    elif name == "web_search":
+        detail = f"'{args.get('query')}'"
     else:
         detail = f"'{args.get('path', 'unknown')}'"
 
@@ -295,6 +345,8 @@ def execute_tool(name: str, args: dict) -> str:
         return delete_file(args["path"])
     elif name == "fetch_webpage":
         return fetch_webpage(args["url"], args.get("use_browser", False))
+    elif name == "web_search":
+        return web_search(args["query"])
     else:
         return f"Unknown tool: {name}"
 
