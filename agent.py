@@ -13,7 +13,6 @@ file, read it. Don't wait for explicit instructions to use tools.
 '''.strip()
 
 client = OpenAI()
-RESULT_PREVIEW_LENGTH = 100
 
 tools = [
     {
@@ -219,10 +218,6 @@ def execute_tool(name: str, args: dict) -> str:
     return tools_map.get(name, lambda: f"Unknown tool: {name}")()
 
 
-def truncate(text: str, max_len: int = RESULT_PREVIEW_LENGTH) -> str:
-    return f"{text[:max_len]}..." if len(text) > max_len else text
-
-
 def run(prompt: str, conversation: list) -> None:
     conversation.append({"role": "user", "content": prompt})
 
@@ -243,6 +238,8 @@ def run(prompt: str, conversation: list) -> None:
         for event in stream:
             match event.type:
                 case "response.output_item.added" if event.item.type == "function_call":
+                    if current_text:
+                        print()  # newline to separate text from tool call
                     item = event.item
                     print(f"[{item.name}] ", end="", flush=True)
                     pending_calls[item.id] = {"call_id": item.call_id, "name": item.name}
@@ -254,8 +251,7 @@ def run(prompt: str, conversation: list) -> None:
                     args = json.loads(event.arguments)
                     result = execute_tool(name, args)
 
-                    print(args)
-                    print(f"  {truncate(result)}\n")
+                    print(f"{args}\n  {result}\n")
 
                     tool_calls.append({
                         "call_id": call_id,
