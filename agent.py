@@ -211,7 +211,14 @@ CONFIRM_TOOLS = {"write_file", "edit_file", "delete_file"}
 
 def confirm_action(name: str, args: dict) -> bool:
     """Prompt user to confirm destructive actions. Returns True if confirmed."""
-    print(f"\n  Confirm {name}? [y/N] ", end="", flush=True)
+    path = args.get("path", "unknown")
+
+    if name == "edit_file":
+        detail = f"'{path}' (replacing '{args.get('old_string', '')}')"
+    else:
+        detail = f"'{path}'"
+
+    print(f"\n  Confirm {name} {detail}? [y/N] ", end="", flush=True)
     try:
         response = input().strip().lower()
         return response in ("y", "yes")
@@ -221,7 +228,7 @@ def confirm_action(name: str, args: dict) -> bool:
 
 def execute_tool(name: str, args: dict) -> str:
     if name in CONFIRM_TOOLS and not confirm_action(name, args):
-        return "Action cancelled by user"
+        return "tool call denied by user. find another approach."
 
     if name == "read_file":
         return read_file(args["path"])
@@ -272,8 +279,6 @@ def run(prompt: str, conversation: list) -> None:
                     args = json.loads(event.arguments)
                     result = execute_tool(name, args)
 
-                    print(f"{args}\n  {result}\n")
-
                     tool_calls.append({
                         "call_id": call_id,
                         "name": name,
@@ -286,7 +291,7 @@ def run(prompt: str, conversation: list) -> None:
                     current_text += event.delta
 
                 case "response.output_text.done" if current_text:
-                    print('-------------------------')
+                    print('')
 
         if not tool_calls:
             if current_text:
