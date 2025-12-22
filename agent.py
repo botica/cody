@@ -244,6 +244,7 @@ def fetch_webpage(url: str, use_browser: bool = False) -> str:
     try:
         if use_browser:
             from playwright.sync_api import sync_playwright
+            print("downloading page with browser", end="", flush=True)
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
                 page = browser.new_page()
@@ -251,25 +252,37 @@ def fetch_webpage(url: str, use_browser: bool = False) -> str:
                 page.wait_for_load_state("networkidle")
                 text = page.inner_text("body")
                 browser.close()
+            print("success")
         else:
             import requests
             from bs4 import BeautifulSoup
+            #print("downloading page", end="", flush=True)
             response = requests.get(url, timeout=15, headers={
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             })
             response.raise_for_status()
+            print(f"{response.status_code}")
+
+            print("parsin ")
             soup = BeautifulSoup(response.text, "html.parser")
             for tag in soup(["script", "style", "nav", "footer", "header"]):
                 tag.decompose()
             text = soup.get_text(separator="\n", strip=True)
+            print("successual ")
 
+        #print("extracting content", end="", flush=True)
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         text = "\n".join(lines)
-        if len(text) > 15000:
-            text = text[:15000] + "\n...[truncated]"
+
+        was_truncated = len(text) > 15000
+        if was_truncated:
+            text = text[:15000] + "\n-"
+
+        print(f"{len(lines)} lines, {len(text)} chars{'-' if was_truncated else ''}]")
         return text
     except Exception as e:
-        return f"Error fetching {url}: {e}"
+        print(f"fail: {e}")
+        return f"error fetching {url}: {e}"
 
 
 def web_search(query: str) -> str:
