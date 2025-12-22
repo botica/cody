@@ -382,6 +382,14 @@ def run(prompt: str, conversation: list) -> None:
                     name = call_info.get("name", "unknown")
                     call_id = call_info.get("call_id", event.item_id)
                     args = json.loads(event.arguments)
+
+                    # Print tool args for visibility
+                    if args:
+                        args_str = ", ".join(f"{k}={repr(v)[:50]}" for k, v in args.items())
+                        print(f"({args_str})")
+                    else:
+                        print()
+
                     result = execute_tool(name, args)
 
                     tool_calls.append({
