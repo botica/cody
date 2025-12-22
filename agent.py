@@ -286,47 +286,64 @@ def delete_file(path: str) -> str:
 
 
 def fetch_webpage(url: str, use_browser: bool = False) -> str:
-    try:
-        if use_browser:
-            from playwright.sync_api import sync_playwright
-            print("downloading page with browser", end="", flush=True)
-            with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True)
-                page = browser.new_page()
-                page.goto(url, timeout=30000)
-                page.wait_for_load_state("networkidle")
-                text = page.inner_text("body")
-                browser.close()
-            print("success")
-        else:
-            import requests
-            from bs4 import BeautifulSoup
-            #print("downloading page", end="", flush=True)
-            response = requests.get(url, timeout=15, headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            })
-            response.raise_for_status()
-            print(f"{response.status_code}")
+    def fetch_with_browser(url: str) -> str:
+        from playwright.sync_api import sync_playwright
+        print("  [browser] launching playwright...", end="", flush=True)
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(url, timeout=30000)
+            page.wait_for_load_state("networkidle")
+            text = page.inner_text("body")
+            browser.close()
+        print("donerbob")
+        return text
 
-            print("parsin ")
-            soup = BeautifulSoup(response.text, "html.parser")
-            for tag in soup(["script", "style", "nav", "footer", "header"]):
-                tag.decompose()
-            text = soup.get_text(separator="\n", strip=True)
-            print("successual ")
+    def fetch_with_requests(url: str) -> str:
+        import requests
+        from bs4 import BeautifulSoup
+        response = requests.get(url, timeout=15, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        })
+        response.raise_for_status()
+        print(f"  [requests] status={response.status_code}, parsing...", end="", flush=True)
 
-        #print("extracting content", end="", flush=True)
+        soup = BeautifulSoup(response.text, "html.parser")
+        for tag in soup(["script", "style", "nav", "footer", "header"]):
+            tag.decompose()
+        text = soup.get_text(separator="\n", strip=True)
+        print(" done")
+        return text
+
+    def process_text(text: str) -> str:
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         text = "\n".join(lines)
-
         was_truncated = len(text) > 15000
         if was_truncated:
             text = text[:15000] + "\n-"
-
-        print(f"{len(lines)} lines, {len(text)} chars{'-' if was_truncated else ''}]")
+        print(f"  -> {len(lines)} lines, {len(text)} chars{' (truncated)' if was_truncated else ''}")
         return text
+
+    try:
+        if use_browser:
+            text = fetch_with_browser(url)
+            return process_text(text)
+
+        # Try requests first, fall back to browser on failure
+        try:
+            text = fetch_with_requests(url)
+            return process_text(text)
+        except Exception as req_err:
+            print(f"{req_err}")
+            print("retrying with playwright")
+            try:
+                text = fetch_with_browser(url)
+                return process_text(text)
+            except Exception as browser_err:
+                print(f"playwright fetch failed - {browser_err}")
+                return f"error fetching {url}: requests failed ({req_err}), browser also failed ({browser_err})"
     except Exception as e:
-        print(f"fail: {e}")
+        print(f"{e}")
         return f"error fetching {url}: {e}"
 
 
@@ -427,7 +444,7 @@ def confirm_action(name: str, args: dict) -> bool:
     else:
         detail = f"'{args.get('path', 'unknown')}'"
 
-    print(f"\n  Confirm {name} {detail}? [y/N] ", end="", flush=True)
+    print(f"\nConfirm {name} {detail}? [YES/no] ", end="", flush=True)
     try:
         response = input().strip().lower()
         return response in ("y", "yes")
@@ -437,7 +454,7 @@ def confirm_action(name: str, args: dict) -> bool:
 
 def execute_tool(name: str, args: dict) -> str:
     if name in CONFIRM_TOOLS and not confirm_action(name, args):
-        return "tool call denied by user. find another approach."
+        return "tool call denied. find another approach."
 
     if name == "read_file":
         return read_file(args["path"])
