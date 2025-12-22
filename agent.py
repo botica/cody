@@ -14,6 +14,9 @@ file, read it.
 
 client = OpenAI()
 
+# Track current working directory across commands
+current_working_dir = os.getcwd()
+
 tools = [
     {
         "type": "function",
@@ -147,13 +150,45 @@ tools = [
             },
             "required": ["query"]
         }
+    },
+    {
+        "type": "function",
+        "name": "run_bash",
+        "description": "Execute a bash/shell command and return the output. Can run Python scripts, git commands, npm, etc.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string",
+                    "description": "The command to execute (e.g., 'python script.py', 'git status', 'npm install')"
+                }
+            },
+            "required": ["command"]
+        }
+    },
+    {
+        "type": "function",
+        "name": "change_directory",
+        "description": "Change the current working directory. Affects where subsequent commands run.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "The directory path to change to (e.g., '..', 'subfolder', '/absolute/path'). Empty string goes to home directory."
+                }
+            },
+            "required": ["path"]
+        }
     }
 ]
 
 
 def read_file(path: str) -> str:
     try:
-        with open(path, encoding="utf-8", errors="replace") as f:
+        # Resolve path relative to current working directory
+        full_path = os.path.abspath(os.path.join(current_working_dir, path))
+        with open(full_path, encoding="utf-8", errors="replace") as f:
             return f.read()
     except FileNotFoundError:
         return f"Error: File not found: {path}"
@@ -163,7 +198,9 @@ def read_file(path: str) -> str:
 
 def list_directory(path: str = ".") -> str:
     try:
-        return "\n".join(os.listdir(path))
+        # Resolve path relative to current working directory
+        full_path = os.path.abspath(os.path.join(current_working_dir, path))
+        return "\n".join(os.listdir(full_path))
     except FileNotFoundError:
         return f"Error: Directory not found: {path}"
     except Exception as e:
@@ -172,7 +209,9 @@ def list_directory(path: str = ".") -> str:
 
 def search(pattern: str, path: str = ".", file_pattern: str | None = None) -> str:
     try:
-        cmd = ["rg", pattern, path, "--color=never", "--max-count=50"]
+        # Resolve path relative to current working directory
+        full_path = os.path.abspath(os.path.join(current_working_dir, path))
+        cmd = ["rg", pattern, full_path, "--color=never", "--max-count=50"]
         if file_pattern:
             cmd.extend(["-g", file_pattern])
 
@@ -194,8 +233,10 @@ def search(pattern: str, path: str = ".", file_pattern: str | None = None) -> st
 
 def write_file(path: str, content: str) -> str:
     try:
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
+        # Resolve path relative to current working directory
+        full_path = os.path.abspath(os.path.join(current_working_dir, path))
+        Path(full_path).parent.mkdir(parents=True, exist_ok=True)
+        with open(full_path, "w", encoding="utf-8") as f:
             f.write(content)
         return f"Successfully wrote {len(content)} bytes to {path}"
     except Exception as e:
@@ -204,7 +245,9 @@ def write_file(path: str, content: str) -> str:
 
 def edit_file(path: str, old_string: str, new_string: str) -> str:
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        # Resolve path relative to current working directory
+        full_path = os.path.abspath(os.path.join(current_working_dir, path))
+        with open(full_path, "r", encoding="utf-8") as f:
             content = f.read()
 
         if old_string not in content:
@@ -215,7 +258,7 @@ def edit_file(path: str, old_string: str, new_string: str) -> str:
             return f"Error: old_string appears {count} times in {path}. Must be unique."
 
         new_content = content.replace(old_string, new_string, 1)
-        with open(path, "w", encoding="utf-8") as f:
+        with open(full_path, "w", encoding="utf-8") as f:
             f.write(new_content)
 
         return f"Successfully edited {path}"
@@ -227,7 +270,9 @@ def edit_file(path: str, old_string: str, new_string: str) -> str:
 
 def delete_file(path: str) -> str:
     try:
-        p = Path(path)
+        # Resolve path relative to current working directory
+        full_path = os.path.abspath(os.path.join(current_working_dir, path))
+        p = Path(full_path)
         if p.is_file():
             p.unlink()
             return f"Successfully deleted file: {path}"
@@ -318,7 +363,53 @@ def web_search(query: str) -> str:
         return f"Error searching: {e}"
 
 
-CONFIRM_TOOLS = {"write_file", "edit_file", "delete_file", "fetch_webpage", "web_search"}
+def change_directory(path: str) -> str:
+    global current_working_dir
+
+    # Handle empty path (go to home directory)
+    if not path:
+        try:
+            current_working_dir = os.path.expanduser("~")
+            return f"Changed directory to {current_working_dir}"
+        except Exception as e:
+            return f"Error: {e}"
+
+    # Resolve the new path relative to current working directory
+    try:
+        new_path = os.path.abspath(os.path.join(current_working_dir, path))
+        if os.path.isdir(new_path):
+            current_working_dir = new_path
+            return f"Changed directory to {current_working_dir}"
+        else:
+            return f"Error: Directory not found: {new_path}"
+    except Exception as e:
+        return f"Error: {e}"
+
+
+def run_bash(command: str) -> str:
+    # Handle pwd command to show current directory
+    if command.strip() == "pwd":
+        return current_working_dir
+
+    # Run commands in the current working directory
+    try:
+        result = subprocess.run(
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            cwd=current_working_dir
+        )
+        output = result.stdout + result.stderr
+        return output if output else f"Command executed successfully (exit code {result.returncode})"
+    except subprocess.TimeoutExpired:
+        return "Error: Command timed out after 30 seconds"
+    except Exception as e:
+        return f"Error executing command: {e}"
+
+
+CONFIRM_TOOLS = {"write_file", "edit_file", "delete_file", "fetch_webpage", "web_search", "run_bash", "change_directory"}
 
 
 def confirm_action(name: str, args: dict) -> bool:
@@ -329,6 +420,10 @@ def confirm_action(name: str, args: dict) -> bool:
         detail = f"'{args.get('url')}'"
     elif name == "web_search":
         detail = f"'{args.get('query')}'"
+    elif name == "run_bash":
+        detail = f"'{args.get('command')}'"
+    elif name == "change_directory":
+        detail = f"'{args.get('path')}'"
     else:
         detail = f"'{args.get('path', 'unknown')}'"
 
@@ -360,6 +455,10 @@ def execute_tool(name: str, args: dict) -> str:
         return fetch_webpage(args["url"], args.get("use_browser", False))
     elif name == "web_search":
         return web_search(args["query"])
+    elif name == "run_bash":
+        return run_bash(args["command"])
+    elif name == "change_directory":
+        return change_directory(args["path"])
     else:
         return f"Unknown tool: {name}"
 
