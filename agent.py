@@ -200,9 +200,9 @@ def read_file(path: str) -> str:
         with open(full_path, encoding="utf-8", errors="replace") as f:
             return f.read()
     except FileNotFoundError:
-        return f"Error: File not found: {path}"
+        return f"error: file not found: {path}"
     except Exception as e:
-        return f"Error reading file: {e}"
+        return f"error reading file: {e}"
 
 
 def list_directory(path: str = ".") -> str:
@@ -211,12 +211,12 @@ def list_directory(path: str = ".") -> str:
         full_path = os.path.abspath(os.path.join(current_working_dir, path))
         return "\n".join(os.listdir(full_path))
     except FileNotFoundError:
-        return f"Error: Directory not found: {path}"
+        return f"error: directory not found: {path}"
     except Exception as e:
-        return f"Error listing directory: {e}"
+        return f"error listing directory: {e}"
 
 
-def search(pattern: str, path: str = ".", file_pattern: str | None = None) -> str:
+def search(pattern: str, path: str = ".", file_pattern=None) -> str:
     try:
         # Resolve path relative to current working directory
         full_path = os.path.abspath(os.path.join(current_working_dir, path))
@@ -229,15 +229,15 @@ def search(pattern: str, path: str = ".", file_pattern: str | None = None) -> st
         if result.returncode == 0:
             return result.stdout.strip()
         elif result.returncode == 1:
-            return "No matches found"
+            return "no matches found"
         else:
-            return f"Search error: {result.stderr}"
+            return f"search error: {result.stderr}"
     except FileNotFoundError:
-        return "Error: ripgrep (rg) is not installed or not on PATH."
+        return "error: ripgrep (rg) is not installed or not on PATH"
     except subprocess.TimeoutExpired:
-        return "Error: Search timed out"
+        return "error: search timed out"
     except Exception as e:
-        return f"Error: {e}"
+        return f"error: {e}"
 
 
 def write_file(path: str, content: str) -> str:
@@ -247,9 +247,9 @@ def write_file(path: str, content: str) -> str:
         Path(full_path).parent.mkdir(parents=True, exist_ok=True)
         with open(full_path, "w", encoding="utf-8") as f:
             f.write(content)
-        return f"Successfully wrote {len(content)} bytes to {path}"
+        return f"successfully wrote {len(content)} bytes to {path}"
     except Exception as e:
-        return f"Error writing file: {e}"
+        return f"error writing file: {e}"
 
 
 def edit_file(path: str, old_string: str, new_string: str) -> str:
@@ -260,21 +260,21 @@ def edit_file(path: str, old_string: str, new_string: str) -> str:
             content = f.read()
 
         if old_string not in content:
-            return f"Error: old_string not found in {path}"
+            return f"error: old_string not found in {path}"
 
         count = content.count(old_string)
         if count > 1:
-            return f"Error: old_string appears {count} times in {path}. Must be unique."
+            return f"error: old_string appears {count} times in {path}, must be unique"
 
         new_content = content.replace(old_string, new_string, 1)
         with open(full_path, "w", encoding="utf-8") as f:
             f.write(new_content)
 
-        return f"Successfully edited {path}"
+        return f"successfully edited {path}"
     except FileNotFoundError:
-        return f"Error: File not found: {path}"
+        return f"error: file not found: {path}"
     except Exception as e:
-        return f"Error editing file: {e}"
+        return f"error editing file: {e}"
 
 
 def delete_file(path: str) -> str:
@@ -284,14 +284,14 @@ def delete_file(path: str) -> str:
         p = Path(full_path)
         if p.is_file():
             p.unlink()
-            return f"Successfully deleted file: {path}"
+            return f"successfully deleted file: {path}"
         elif p.is_dir():
             p.rmdir()
-            return f"Successfully deleted directory: {path}"
+            return f"successfully deleted directory: {path}"
         else:
-            return f"Error: Path not found: {path}"
+            return f"error: path not found: {path}"
     except OSError as e:
-        return f"Error deleting: {e}"
+        return f"error deleting: {e}"
 
 
 def fetch_webpage(url: str, use_browser: bool = False) -> str:
@@ -395,12 +395,12 @@ def web_search(query: str) -> str:
 
         if not results:
             print("(no results)")
-            return "No search results found."
+            return "no search results found"
 
         return "\n\n".join(results)
     except Exception as e:
         print(f"error: {e}")
-        return f"Error searching: {e}"
+        return f"error searching: {e}"
 
 
 def change_directory(path: str) -> str:
@@ -410,20 +410,20 @@ def change_directory(path: str) -> str:
     if not path:
         try:
             current_working_dir = os.path.expanduser("~")
-            return f"Changed directory to {current_working_dir}"
+            return f"changed directory to {current_working_dir}"
         except Exception as e:
-            return f"Error: {e}"
+            return f"error: {e}"
 
     # Resolve the new path relative to current working directory
     try:
         new_path = os.path.abspath(os.path.join(current_working_dir, path))
         if os.path.isdir(new_path):
             current_working_dir = new_path
-            return f"Changed directory to {current_working_dir}"
+            return f"changed directory to {current_working_dir}"
         else:
-            return f"Error: Directory not found: {new_path}"
+            return f"error: directory not found: {new_path}"
     except Exception as e:
-        return f"Error: {e}"
+        return f"error: {e}"
 
 
 def run_bash(command: str) -> str:
@@ -442,11 +442,11 @@ def run_bash(command: str) -> str:
             cwd=current_working_dir
         )
         output = result.stdout + result.stderr
-        return output if output else f"Command executed successfully (exit code {result.returncode})"
+        return output if output else f"command executed successfully (exit code {result.returncode})"
     except subprocess.TimeoutExpired:
-        return "Error: Command timed out after 30 seconds"
+        return "error: command timed out after 30 seconds"
     except Exception as e:
-        return f"Error executing command: {e}"
+        return f"error executing command: {e}"
 
 
 CONFIRM_TOOLS = {"write_file", "edit_file", "delete_file", "fetch_webpage", "web_search", "run_bash", "change_directory"}
@@ -500,7 +500,7 @@ def execute_tool(name: str, args: dict) -> str:
     elif name == "change_directory":
         return change_directory(args["path"])
     else:
-        return f"Unknown tool: {name}"
+        return f"unknown tool: {name}"
 
 
 def run(prompt: str, conversation: list) -> None:
@@ -537,7 +537,7 @@ def run(prompt: str, conversation: list) -> None:
 
                     # Print tool args for visibility
                     if args:
-                        args_str = ", ".join(f"{k}={repr(v)[:50]}" for k, v in args.items())
+                        args_str = ", ".join(f"{k}={repr(v)}" for k, v in args.items())
                         print(f"({args_str})")
                     else:
                         print()
