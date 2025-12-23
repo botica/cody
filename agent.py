@@ -288,12 +288,9 @@ def delete_file(path: str) -> str:
 
 
 def fetch_webpage(url: str, use_browser: bool = False) -> str:
-    from fake_useragent import UserAgent
-    ua = UserAgent()
-
     def get_headers():
         return {
-            "User-Agent": ua.random,
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
             "Accept-Encoding": "gzip, deflate, br",
