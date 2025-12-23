@@ -10,15 +10,10 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODEL = "google/gemini-2.0-flash-exp:free"
 
 SYSTEM_PROMPT = '''
-You are an AI agent named Cody. Your goal is to assist the user with coding tasks and other
-requests. You have actionable tools available—use them freely and proactively without hesitation.
-If you need to explore the filesystem, search directories, list
-directory contents, or read files to understand the codebase, do so. If you're curious about a
-file, read it.
-
-IMPORTANT: You have a strict limit of 4 tool calls per response. After gathering initial
-information, STOP and summarize what you found. Do NOT exhaustively check multiple sources.
-One good source is enough. The user can ask follow-up if they need more info.
+You are an AI agent named Cody. You assist with coding tasks and have tools available.
+STRICT LIMIT: Maximum 2-3 tool calls per response. One good source is enough.
+Do NOT chain multiple searches or fetches. Summarize what you have and stop.
+The user can ask follow-up questions if they need more.
 '''.strip()
 
 # Track current working directory across commands
@@ -314,19 +309,17 @@ def fetch_webpage(url: str, use_browser: bool = False) -> str:
 
     def fetch_with_browser(url: str) -> str:
         from playwright.sync_api import sync_playwright
-        from playwright_stealth import Stealth
-        print("[browser] launching stealth playwright...", end="", flush=True)
-        with Stealth().use_sync(sync_playwright()) as p:
-            browser = p.chromium.launch(headless=True)
+        print("[browser] launching playwright firefox", end="", flush=True)
+        with sync_playwright() as p:
+            browser = p.firefox.launch(headless=True)
             context = browser.new_context(
-                user_agent=ua.random,
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
                 viewport={"width": 1920, "height": 1080},
                 locale="en-US",
-                timezone_id="America/Chicago",
+                timezone_id="America/New_York",
             )
             page = context.new_page()
-            page.goto(url, timeout=30000, wait_until="domcontentloaded")
-            page.wait_for_timeout(2000)  # let JS render
+            page.goto(url, timeout=30000, wait_until="load")
             text = page.inner_text("body")
             browser.close()
         print(" done")
@@ -365,7 +358,7 @@ def fetch_webpage(url: str, use_browser: bool = False) -> str:
             return process_text(text)
         except Exception as req_err:
             print(f"{req_err}")
-            print("retrying with stealth playwright")
+            print("retrying with playwright firefox")
             try:
                 text = fetch_with_browser(url)
                 return process_text(text)
