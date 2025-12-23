@@ -2,7 +2,11 @@ import json
 import os
 import subprocess
 from pathlib import Path
-from openai import OpenAI
+import requests
+
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+MODEL = "google/gemini-2.0-flash-exp:free"
 
 SYSTEM_PROMPT = '''
 You are an AI agent named Cody. Your goal is to assist the user with coding tasks and other
@@ -11,8 +15,6 @@ If you need to explore the filesystem, search directories, list
 directory contents, or read files to understand the codebase, do so. If you're curious about a
 file, read it.
 '''.strip()
-
-client = OpenAI()
 
 # Track current working directory across commands
 current_working_dir = os.getcwd()
@@ -483,74 +485,136 @@ def execute_tool(name: str, args: dict) -> str:
 def run(prompt: str, conversation: list) -> None:
     conversation.append({"role": "user", "content": prompt})
 
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    # Convert tools to OpenAI chat completions format
+    openai_tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": t["name"],
+                "description": t["description"],
+                "parameters": t["parameters"]
+            }
+        }
+        for t in tools
+    ]
+
     while True:
-        stream = client.responses.create(
-            model="gpt-5.2",
-            input=conversation,
-            tools=tools,
-            reasoning={"effort": "medium"},
-            text={"verbosity": "low"},
-            stream=True
-        )
+        payload = {
+            "model": MODEL,
+            "messages": conversation,
+            "tools": openai_tools,
+            "stream": True
+        }
 
-        tool_calls = []
+        tool_calls_by_index = {}
         current_text = ""
-        pending_calls = {}
 
-        for event in stream:
-            match event.type:
-                case "response.output_item.added" if event.item.type == "function_call":
-                    if current_text:
-                        print()  # newline to separate text from tool call
-                    item = event.item
-                    print(f"[{item.name}] ", end="", flush=True)
-                    pending_calls[item.id] = {"call_id": item.call_id, "name": item.name}
+        with requests.post(OPENROUTER_URL, headers=headers, json=payload, stream=True) as response:
+            if response.status_code != 200:
+                print(f"Error {response.status_code}: {response.text}")
+                return
+            buffer = ""
 
-                case "response.function_call_arguments.done":
-                    call_info = pending_calls.get(event.item_id, {})
-                    name = call_info.get("name", "unknown")
-                    call_id = call_info.get("call_id", event.item_id)
-                    args = json.loads(event.arguments)
+            for chunk in response.iter_content(chunk_size=1024, decode_unicode=True):
+                buffer += chunk
 
-                    # Print tool args for visibility
-                    if args:
-                        args_str = ", ".join(f"{k}={repr(v)[:50]}" for k, v in args.items())
-                        print(f"({args_str})")
-                    else:
-                        print()
+                while True:
+                    line_end = buffer.find('\n')
+                    if line_end == -1:
+                        break
 
-                    result = execute_tool(name, args)
+                    line = buffer[:line_end].strip()
+                    buffer = buffer[line_end + 1:]
 
-                    tool_calls.append({
-                        "call_id": call_id,
-                        "name": name,
-                        "arguments": event.arguments,
-                        "result": result
-                    })
+                    if not line.startswith('data: '):
+                        continue
 
-                case "response.output_text.delta":
-                    print(event.delta, end="", flush=True)
-                    current_text += event.delta
+                    data = line[6:]
+                    if data == '[DONE]':
+                        break
 
-                case "response.output_text.done" if current_text:
-                    print('')
+                    try:
+                        data_obj = json.loads(data)
+                        delta = data_obj["choices"][0].get("delta", {})
+
+                        # Handle text content
+                        content = delta.get("content")
+                        if content:
+                            print(content, end="", flush=True)
+                            current_text += content
+
+                        # Handle tool calls
+                        if "tool_calls" in delta:
+                            for tc in delta["tool_calls"]:
+                                idx = tc["index"]
+                                if idx not in tool_calls_by_index:
+                                    tool_calls_by_index[idx] = {
+                                        "id": tc.get("id", ""),
+                                        "name": tc.get("function", {}).get("name", ""),
+                                        "arguments": ""
+                                    }
+                                    if current_text:
+                                        print()
+                                    print(f"[{tool_calls_by_index[idx]['name']}] ", end="", flush=True)
+
+                                # Accumulate function arguments
+                                if "function" in tc and "arguments" in tc["function"]:
+                                    tool_calls_by_index[idx]["arguments"] += tc["function"]["arguments"]
+
+                    except json.JSONDecodeError:
+                        pass
+
+        if current_text:
+            print()
+
+        # Process completed tool calls
+        tool_calls = list(tool_calls_by_index.values())
 
         if not tool_calls:
             if current_text:
                 conversation.append({"role": "assistant", "content": current_text})
             break
 
+        # Build assistant message with tool calls
+        assistant_msg = {
+            "role": "assistant",
+            "content": current_text or None,
+            "tool_calls": [
+                {
+                    "id": tc["id"],
+                    "type": "function",
+                    "function": {
+                        "name": tc["name"],
+                        "arguments": tc["arguments"]
+                    }
+                }
+                for tc in tool_calls
+            ]
+        }
+        conversation.append(assistant_msg)
+
+        # Execute tools and add results
         for tc in tool_calls:
+            args = json.loads(tc["arguments"])
+
+            # Print tool args for visibility
+            if args:
+                args_str = ", ".join(f"{k}={repr(v)[:50]}" for k, v in args.items())
+                print(f"({args_str})")
+            else:
+                print()
+
+            result = execute_tool(tc["name"], args)
+
             conversation.append({
-                "type": "function_call",
-                "call_id": tc["call_id"],
-                "name": tc["name"],
-                "arguments": tc["arguments"]
-            })
-            conversation.append({
-                "type": "function_call_output",
-                "call_id": tc["call_id"],
-                "output": tc["result"]
+                "role": "tool",
+                "tool_call_id": tc["id"],
+                "content": result
             })
 
 
