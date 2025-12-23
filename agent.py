@@ -506,25 +506,32 @@ def execute_tool(name: str, args: dict) -> str:
         return f"unknown tool: {name}"
 
 
-def run(prompt: str, conversation: list) -> None:
+def run(prompt: str, conversation: list, previous_response_id: str = None) -> str:
+    """Run a conversation turn. Returns the response_id for chaining."""
     conversation.append({"role": "user", "content": prompt})
 
     while True:
         stream = client.responses.create(
             model="gpt-5.2",
             input=conversation,
+            instructions=SYSTEM_PROMPT,
             tools=tools,
             reasoning={"effort": "medium"},
             text={"verbosity": "low"},
+            previous_response_id=previous_response_id,
             stream=True
         )
 
         tool_calls = []
         current_text = ""
         pending_calls = {}
+        response_id = None
 
         for event in stream:
             match event.type:
+                case "response.created":
+                    response_id = event.response.id
+
                 case "response.output_item.added" if event.item.type == "function_call":
                     if current_text:
                         print()  # newline to separate text from tool call
@@ -564,7 +571,7 @@ def run(prompt: str, conversation: list) -> None:
         if not tool_calls:
             if current_text:
                 conversation.append({"role": "assistant", "content": current_text})
-            break
+            return response_id
 
         for tc in tool_calls:
             conversation.append({
@@ -581,12 +588,13 @@ def run(prompt: str, conversation: list) -> None:
 
 
 if __name__ == "__main__":
-    conversation = [{"role": "system", "content": SYSTEM_PROMPT}]
+    conversation = []
+    last_response_id = None
     while True:
         try:
             prompt = input("> ")
             if prompt.strip():
-                run(prompt, conversation)
+                last_response_id = run(prompt, conversation, last_response_id)
         except (KeyboardInterrupt, EOFError):
             print()
             sys.exit(0)
