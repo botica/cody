@@ -1,6 +1,5 @@
 import json
 import os
-import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -9,9 +8,6 @@ import requests
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODEL = "google/gemini-2.0-flash-exp:free"
-
-# Make Ctrl+C exit immediately
-signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
 
 SYSTEM_PROMPT = '''
 You are an AI agent named Cody. Your goal is to assist the user with coding tasks and other
@@ -433,20 +429,36 @@ def run_bash(command: str) -> str:
     if command.strip() == "pwd":
         return current_working_dir
 
-    # Run commands in the current working directory
+    # Run commands in the current working directory with real-time output
     try:
-        result = subprocess.run(
+        env = os.environ.copy()
+        env["PYTHONUNBUFFERED"] = "1"
+
+        process = subprocess.Popen(
             command,
             shell=True,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
-            timeout=30,
-            cwd=current_working_dir
+            bufsize=1,
+            cwd=current_working_dir,
+            env=env
         )
-        output = result.stdout + result.stderr
-        return output if output else f"Command executed successfully (exit code {result.returncode})"
+
+        output_lines = []
+        while True:
+            line = process.stdout.readline()
+            if not line and process.poll() is not None:
+                break
+            if line:
+                print(line, end="", flush=True)
+                output_lines.append(line)
+
+        output = "".join(output_lines)
+        return output if output else f"command executed successfully (exit code {process.returncode})"
     except subprocess.TimeoutExpired:
-        return "Error: Command timed out after 30 seconds"
+        process.kill()
+        return "error: command timed out after 30 seconds"
     except Exception as e:
         return f"Error executing command: {e}"
 
@@ -474,7 +486,8 @@ def confirm_action(name: str, args: dict) -> bool:
         response = input().strip().lower()
         return response in ("y", "yes")
     except (KeyboardInterrupt, EOFError):
-        return False
+        print()
+        sys.exit(0)
 
 
 def execute_tool(name: str, args: dict) -> str:
@@ -649,4 +662,5 @@ if __name__ == "__main__":
             if prompt.strip():
                 run(prompt, conversation)
         except (KeyboardInterrupt, EOFError):
-            break
+            print()
+            sys.exit(0)
