@@ -1,6 +1,8 @@
 import json
 import os
+import signal
 import subprocess
+import sys
 from pathlib import Path
 import requests
 
@@ -8,12 +10,19 @@ OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODEL = "google/gemini-2.0-flash-exp:free"
 
+# Make Ctrl+C exit immediately
+signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
+
 SYSTEM_PROMPT = '''
 You are an AI agent named Cody. Your goal is to assist the user with coding tasks and other
 requests. You have actionable tools available—use them freely and proactively without hesitation.
 If you need to explore the filesystem, search directories, list
 directory contents, or read files to understand the codebase, do so. If you're curious about a
 file, read it.
+
+IMPORTANT: You have a strict limit of 4 tool calls per response. After gathering initial
+information, STOP and summarize what you found. Do NOT exhaustively check multiple sources.
+One good source is enough. The user can ask follow-up if they need more info.
 '''.strip()
 
 # Track current working directory across commands
@@ -288,27 +297,53 @@ def delete_file(path: str) -> str:
 
 
 def fetch_webpage(url: str, use_browser: bool = False) -> str:
+    from fake_useragent import UserAgent
+    ua = UserAgent()
+
+    def get_headers():
+        return {
+            "User-Agent": ua.random,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
+            "DNT": "1",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+            "Cache-Control": "max-age=0",
+        }
+
     def fetch_with_browser(url: str) -> str:
         from playwright.sync_api import sync_playwright
-        print("  [browser] launching playwright...", end="", flush=True)
-        with sync_playwright() as p:
+        from playwright_stealth import Stealth
+        print("[browser] launching stealth playwright...", end="", flush=True)
+        with Stealth().use_sync(sync_playwright()) as p:
             browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
-            page.goto(url, timeout=30000)
-            page.wait_for_load_state("networkidle")
+            context = browser.new_context(
+                user_agent=ua.random,
+                viewport={"width": 1920, "height": 1080},
+                locale="en-US",
+                timezone_id="America/Chicago",
+            )
+            page = context.new_page()
+            page.goto(url, timeout=30000, wait_until="domcontentloaded")
+            page.wait_for_timeout(2000)  # let JS render
             text = page.inner_text("body")
             browser.close()
-        print("donerbob")
+        print(" done")
         return text
 
     def fetch_with_requests(url: str) -> str:
         import requests
         from bs4 import BeautifulSoup
-        response = requests.get(url, timeout=15, headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        })
+        session = requests.Session()
+        headers = get_headers()
+        response = session.get(url, timeout=15, headers=headers)
         response.raise_for_status()
-        print(f"  [requests] status={response.status_code}, parsing...", end="", flush=True)
+        print(f"[requests] status={response.status_code}, parsing...", end="", flush=True)
 
         soup = BeautifulSoup(response.text, "html.parser")
         for tag in soup(["script", "style", "nav", "footer", "header"]):
@@ -320,10 +355,7 @@ def fetch_webpage(url: str, use_browser: bool = False) -> str:
     def process_text(text: str) -> str:
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         text = "\n".join(lines)
-        was_truncated = len(text) > 15000
-        if was_truncated:
-            text = text[:15000] + "\n-"
-        print(f"  -> {len(lines)} lines, {len(text)} chars{' (truncated)' if was_truncated else ''}")
+        print(f"{len(lines)} lines, {len(text)} chars")
         return text
 
     try:
@@ -337,12 +369,12 @@ def fetch_webpage(url: str, use_browser: bool = False) -> str:
             return process_text(text)
         except Exception as req_err:
             print(f"{req_err}")
-            print("retrying with playwright")
+            print("retrying with stealth playwright")
             try:
                 text = fetch_with_browser(url)
                 return process_text(text)
             except Exception as browser_err:
-                print(f"playwright fetch failed - {browser_err}")
+                print(f"playwright failed: {browser_err}")
                 return f"error fetching {url}: requests failed ({req_err}), browser also failed ({browser_err})"
     except Exception as e:
         print(f"{e}")
@@ -351,34 +383,25 @@ def fetch_webpage(url: str, use_browser: bool = False) -> str:
 
 def web_search(query: str) -> str:
     try:
-        import requests
-        from bs4 import BeautifulSoup
-        from urllib.parse import quote_plus
+        from ddgs import DDGS
 
-        url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
-        response = requests.get(url, timeout=15, headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        })
-        response.raise_for_status()
-
-        soup = BeautifulSoup(response.text, "html.parser")
+        print(f"[search] querying '{query}'")
         results = []
-
-        for result in soup.select(".result")[:10]:
-            title_elem = result.select_one(".result__title a")
-            snippet_elem = result.select_one(".result__snippet")
-
-            if title_elem:
-                title = title_elem.get_text(strip=True)
-                href = title_elem.get("href", "")
-                snippet = snippet_elem.get_text(strip=True) if snippet_elem else ""
-                results.append(f"- {title}\n  {href}\n  {snippet}")
+        with DDGS() as ddgs:
+            for r in ddgs.text(query, max_results=5):
+                title = r.get("title", "")
+                href = r.get("href", "")
+                body = r.get("body", "")
+                print(f"{title}")
+                results.append(f"- {title}\n  {href}\n  {body}")
 
         if not results:
+            print("(no results)")
             return "No search results found."
 
         return "\n\n".join(results)
     except Exception as e:
+        print(f"error: {e}")
         return f"Error searching: {e}"
 
 
