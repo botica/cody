@@ -17,6 +17,14 @@ client = OpenAI()
 # Track current working directory across commands
 current_working_dir = os.getcwd()
 
+# Track token usage across the conversation
+token_usage = {"input": 0, "output": 0}
+
+# GPT-5.2 pricing per token
+PRICE_INPUT = 1.75 / 1_000_000    # $1.75 per 1M tokens
+PRICE_CACHED = 0.18 / 1_000_000   # $0.18 per 1M tokens
+PRICE_OUTPUT = 14.00 / 1_000_000  # $14.00 per 1M tokens
+
 tools = [
     {
         "type": "function",
@@ -567,6 +575,29 @@ def run(prompt: str, conversation: list, previous_response_id: str = None) -> st
 
                 case "response.output_text.done" if current_text:
                     print('')
+
+                case "response.completed":
+                    usage = event.response.usage
+                    token_usage["input"] += usage.input_tokens
+                    token_usage["output"] += usage.output_tokens
+
+                    # Calculate cost (check for cached tokens if available)
+                    cached = getattr(usage, 'input_tokens_details', None)
+                    cached_tokens = getattr(cached, 'cached_tokens', 0) if cached else 0
+                    uncached_tokens = usage.input_tokens - cached_tokens
+
+                    turn_cost = (uncached_tokens * PRICE_INPUT +
+                                cached_tokens * PRICE_CACHED +
+                                usage.output_tokens * PRICE_OUTPUT)
+                    total_cost = (token_usage["input"] * PRICE_INPUT +
+                                 token_usage["output"] * PRICE_OUTPUT)
+
+                    # Show cached breakdown if any caching occurred
+                    if cached_tokens > 0:
+                        cache_pct = cached_tokens / usage.input_tokens * 100
+                        print(f"[tokens] +{usage.input_tokens:,} in ({cached_tokens:,} cached, {cache_pct:.0f}%), +{usage.output_tokens:,} out (${turn_cost:.4f}) | session: ${total_cost:.4f}")
+                    else:
+                        print(f"[tokens] +{usage.input_tokens:,} in, +{usage.output_tokens:,} out (${turn_cost:.4f}) | session: ${total_cost:.4f}")
 
         if not tool_calls:
             if current_text:
