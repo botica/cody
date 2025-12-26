@@ -377,7 +377,6 @@ def web_search(query: str) -> str:
     try:
         from ddgs import DDGS
 
-        print(f"[search] querying '{query}'")
         results = []
         with DDGS() as ddgs:
             for r in ddgs.text(query, max_results=5):
@@ -586,18 +585,20 @@ def run(prompt: str, conversation: list, previous_response_id: str = None) -> st
                     cached_tokens = getattr(cached, 'cached_tokens', 0) if cached else 0
                     uncached_tokens = usage.input_tokens - cached_tokens
 
-                    turn_cost = (uncached_tokens * PRICE_INPUT +
-                                cached_tokens * PRICE_CACHED +
-                                usage.output_tokens * PRICE_OUTPUT)
+                    turn_input_cost = uncached_tokens * PRICE_INPUT + cached_tokens * PRICE_CACHED
+                    turn_output_cost = usage.output_tokens * PRICE_OUTPUT
+                    turn_cost = turn_input_cost + turn_output_cost
+
                     total_cost = (token_usage["input"] * PRICE_INPUT +
                                  token_usage["output"] * PRICE_OUTPUT)
 
                     # Show cached breakdown if any caching occurred
                     if cached_tokens > 0:
                         cache_pct = cached_tokens / usage.input_tokens * 100
-                        print(f"[tokens] +{usage.input_tokens:,} in ({cached_tokens:,} cached, {cache_pct:.0f}%), +{usage.output_tokens:,} out (${turn_cost:.4f}) | session: ${total_cost:.4f}")
+                        print(f"[tokens] +{usage.input_tokens:,} in ({cached_tokens:,} cached, {cache_pct:.0f}%), +{usage.output_tokens:,} out")
                     else:
-                        print(f"[tokens] +{usage.input_tokens:,} in, +{usage.output_tokens:,} out (${turn_cost:.4f}) | session: ${total_cost:.4f}")
+                        print(f"[tokens] +{usage.input_tokens:,} in, +{usage.output_tokens:,} out")
+                    print(f"[cost] in: ${turn_input_cost:.4f}, out: ${turn_output_cost:.4f}, turn: ${turn_cost:.4f} | session: ${total_cost:.4f}")
 
         if not tool_calls:
             if current_text:
