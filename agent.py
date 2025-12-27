@@ -12,8 +12,13 @@ OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODEL = "minimax/minimax-m2.1"
 
-# Track token usage across the conversation
-token_usage = {"input": 0, "output": 0}
+# Pricing per million tokens (input, output)
+MODEL_PRICING = {
+    "minimax/minimax-m2.1": (0.30, 1.20),
+}
+
+# Track token usage and cost across the conversation
+token_usage = {"input": 0, "output": 0, "cost": 0.0}
 
 SYSTEM_PROMPT = '''
 You are an AI agent named Cody. You assist with coding tasks and have tools available.
@@ -621,7 +626,15 @@ def run(prompt: str, conversation: list) -> None:
             out = turn_usage.get("completion_tokens", 0)
             token_usage["input"] += inp
             token_usage["output"] += out
-            print(f"[tokens] +{inp:,} in, +{out:,} out | session: {token_usage['input']:,} in, {token_usage['output']:,} out")
+
+            # Calculate cost if pricing available
+            pricing = MODEL_PRICING.get(MODEL)
+            if pricing:
+                turn_cost = (inp * pricing[0] + out * pricing[1]) / 1_000_000
+                token_usage["cost"] += turn_cost
+                print(f"[tokens] +{inp:,} in, +{out:,} out (${turn_cost:.4f}) | session: ${token_usage['cost']:.4f}")
+            else:
+                print(f"[tokens] +{inp:,} in, +{out:,} out | session: {token_usage['input']:,} in, {token_usage['output']:,} out")
 
         # Process completed tool calls
         tool_calls = list(tool_calls_by_index.values())
