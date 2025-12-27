@@ -6,11 +6,15 @@ from pathlib import Path
 import requests
 
 # Fix UTF-8 output on Windows
-sys.stdout.reconfigure(encoding='utf-8')
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "minimax/minimax-m2.1"
+MODEL = 'minimax/minimax-m2.1'
+#MODEL = 'deepseek/deepseek-r1'
 
 # Pricing per million tokens (input, output)
 MODEL_PRICING = {
@@ -22,8 +26,8 @@ token_usage = {"input": 0, "output": 0, "cost": 0.0}
 
 SYSTEM_PROMPT = '''
 You are an AI agent named Cody. You assist with coding tasks and have tools available.
-STRICT LIMIT: Maximum 2-3 tool calls per response. One good source is enough.
-Do NOT chain multiple searches or fetches. Summarize what you have and stop.
+STRICT LIMIT: Maximum 5 tool calls per response. One good source is enough.
+Do NOT chain many searches or fetches. Summarize what you have and stop.
 The user can ask follow-up questions if they need more.
 '''.strip()
 
@@ -552,6 +556,7 @@ def run(prompt: str, conversation: list) -> None:
         tool_calls_by_index = {}
         current_text = ""
         turn_usage = None
+        reasoning_details = None  # Preserve reasoning blocks for models that use them
 
         with requests.post(OPENROUTER_URL, headers=headers, json=payload, stream=True) as response:
             if response.status_code != 200:
@@ -589,6 +594,21 @@ def run(prompt: str, conversation: list) -> None:
                             continue
 
                         delta = data_obj["choices"][0].get("delta", {})
+
+                        # Debug: uncomment to see what fields are in delta
+                        # if delta: print(f"\n[DEBUG delta keys: {list(delta.keys())}]", end="", flush=True)
+
+                        # Handle reasoning details (for models like minimax that use reasoning)
+                        if "reasoning_details" in data_obj["choices"][0].get("message", {}):
+                            reasoning_details = data_obj["choices"][0]["message"]["reasoning_details"]
+                        # Also check in delta for streaming
+                        if "reasoning_details" in delta:
+                            reasoning_details = delta["reasoning_details"]
+
+                        # Handle streaming reasoning content (deepseek-r1, etc.)
+                        reasoning = delta.get("reasoning") or delta.get("reasoning_content")
+                        if reasoning:
+                            print(f"\033[90m{reasoning}\033[0m", end="", flush=True)  # Gray text for thinking
 
                         # Handle text content
                         content = delta.get("content")
@@ -641,7 +661,10 @@ def run(prompt: str, conversation: list) -> None:
 
         if not tool_calls:
             if current_text:
-                conversation.append({"role": "assistant", "content": current_text})
+                msg = {"role": "assistant", "content": current_text}
+                if reasoning_details:  # Only if non-empty
+                    msg["reasoning_details"] = reasoning_details
+                conversation.append(msg)
             break
 
         # Build assistant message with tool calls
@@ -660,6 +683,10 @@ def run(prompt: str, conversation: list) -> None:
                 for tc in tool_calls
             ]
         }
+        # Preserve reasoning_details for models that use reasoning tokens
+        if reasoning_details:  # Only if non-empty
+            print(f"[reasoning] captured {len(reasoning_details)} blocks")
+            assistant_msg["reasoning_details"] = reasoning_details
         conversation.append(assistant_msg)
 
         # Execute tools and add results
