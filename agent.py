@@ -25,14 +25,15 @@ MODEL_PRICING = {
 token_usage = {"input": 0, "output": 0, "cost": 0.0}
 
 SYSTEM_PROMPT = '''
-You are an AI agent named Cody. You assist with coding tasks and have tools available.
-STRICT LIMIT: Maximum 5 tool calls per response. One good source is enough.
-Do NOT chain many searches or fetches. Summarize what you have and stop.
-The user can ask follow-up questions if they need more.
+You are an AI agent named Cody. You assist the user with general tasks, coding tasks, and have tools available for usage.
+Use your tools efficiently to complete the task.
 '''.strip()
 
 # Track current working directory across commands
 current_working_dir = os.getcwd()
+
+# Auto-confirm for current turn (reset each turn)
+auto_confirm_turn = False
 
 tools = [
     {
@@ -473,6 +474,11 @@ CONFIRM_TOOLS = {"write_file", "edit_file", "delete_file", "fetch_webpage", "web
 
 def confirm_action(name: str, args: dict) -> bool:
     """Prompt user to confirm destructive actions. Returns True if confirmed."""
+    global auto_confirm_turn
+
+    if auto_confirm_turn:
+        return True
+
     if name == "edit_file":
         detail = f"'{args.get('path')}' (replacing '{args.get('old_string', '')}')"
     elif name == "fetch_webpage":
@@ -486,9 +492,12 @@ def confirm_action(name: str, args: dict) -> bool:
     else:
         detail = f"'{args.get('path', 'unknown')}'"
 
-    print(f"\nConfirm {name} {detail}? [YES/no] ", end="", flush=True)
+    print(f"\nConfirm {name} {detail}? [y/n/!] ", end="", flush=True)
     try:
         response = input().strip().lower()
+        if response == "!":
+            auto_confirm_turn = True
+            return True
         return response in ("y", "yes")
     except (KeyboardInterrupt, EOFError):
         print()
@@ -524,6 +533,9 @@ def execute_tool(name: str, args: dict) -> str:
 
 
 def run(prompt: str, conversation: list) -> None:
+    global auto_confirm_turn
+    auto_confirm_turn = False  # Reset at start of each turn
+
     conversation.append({"role": "user", "content": prompt})
 
     headers = {
