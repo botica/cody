@@ -5,9 +5,15 @@ import sys
 from pathlib import Path
 import requests
 
+# Fix UTF-8 output on Windows
+sys.stdout.reconfigure(encoding='utf-8')
+
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "google/gemini-2.0-flash-exp:free"
+MODEL = "minimax/minimax-m2.1"
+
+# Track token usage across the conversation
+token_usage = {"input": 0, "output": 0}
 
 SYSTEM_PROMPT = '''
 You are an AI agent named Cody. You assist with coding tasks and have tools available.
@@ -534,11 +540,13 @@ def run(prompt: str, conversation: list) -> None:
             "model": MODEL,
             "messages": conversation,
             "tools": openai_tools,
-            "stream": True
+            "stream": True,
+            "stream_options": {"include_usage": True}  # Request token usage in response
         }
 
         tool_calls_by_index = {}
         current_text = ""
+        turn_usage = None
 
         with requests.post(OPENROUTER_URL, headers=headers, json=payload, stream=True) as response:
             if response.status_code != 200:
@@ -566,6 +574,15 @@ def run(prompt: str, conversation: list) -> None:
 
                     try:
                         data_obj = json.loads(data)
+
+                        # Capture usage if present
+                        if "usage" in data_obj:
+                            turn_usage = data_obj["usage"]
+
+                        # Skip if no choices (usage-only chunk)
+                        if not data_obj.get("choices"):
+                            continue
+
                         delta = data_obj["choices"][0].get("delta", {})
 
                         # Handle text content
@@ -597,6 +614,14 @@ def run(prompt: str, conversation: list) -> None:
 
         if current_text:
             print()
+
+        # Print token usage if available
+        if turn_usage:
+            inp = turn_usage.get("prompt_tokens", 0)
+            out = turn_usage.get("completion_tokens", 0)
+            token_usage["input"] += inp
+            token_usage["output"] += out
+            print(f"[tokens] +{inp:,} in, +{out:,} out | session: {token_usage['input']:,} in, {token_usage['output']:,} out")
 
         # Process completed tool calls
         tool_calls = list(tool_calls_by_index.values())
