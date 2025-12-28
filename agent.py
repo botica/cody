@@ -32,20 +32,26 @@ def run(prompt: str, session: Session) -> None:
             break
 
         # Build assistant message with tool calls
+        def build_tool_call(tc, is_first=False):
+            func_obj = {
+                "name": tc["name"],
+                "arguments": tc["arguments"]
+            }
+            # Gemini requires thought_signature for tool calls
+            # Use dummy signature if not provided (per Google docs)
+            if "gemini" in MODEL and is_first:
+                func_obj["thought_signature"] = "placeholder"
+
+            return {
+                "id": tc["id"],
+                "type": "function",
+                "function": func_obj
+            }
+
         assistant_msg = {
             "role": "assistant",
             "content": text or None,
-            "tool_calls": [
-                {
-                    "id": tc["id"],
-                    "type": "function",
-                    "function": {
-                        "name": tc["name"],
-                        "arguments": tc["arguments"]
-                    }
-                }
-                for tc in tool_calls
-            ]
+            "tool_calls": [build_tool_call(tc, i == 0) for i, tc in enumerate(tool_calls)]
         }
         if reasoning_details:
             print(f"[reasoning] captured {len(reasoning_details)} blocks")
