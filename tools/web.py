@@ -73,7 +73,7 @@ def _process_text(text: str) -> str:
     },
     required=["url"]
 )
-def fetch_webpage(url: str, use_browser: bool = False, **kwargs) -> str:
+def fetch_webpage(url: str, use_browser: bool = False, session=None) -> str:
     try:
         if use_browser:
             text = _fetch_with_browser(url)
@@ -103,7 +103,7 @@ def fetch_webpage(url: str, use_browser: bool = False, **kwargs) -> str:
     params={"query": "The search query"},
     required=["query"]
 )
-def web_search(query: str, **kwargs) -> str:
+def web_search(query: str, session=None) -> str:
     try:
         from ddgs import DDGS
 

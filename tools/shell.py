@@ -12,7 +12,7 @@ from . import tool
     params={"command": "The command to execute (e.g., 'python script.py', 'git status', 'npm install')"},
     required=["command"]
 )
-def run_bash(command: str, session) -> str:
+def run_bash(command: str, session=None) -> str:
     # Handle pwd command to show current directory
     if command.strip() == "pwd":
         return session.cwd
@@ -56,7 +56,7 @@ def run_bash(command: str, session) -> str:
     params={"path": "The directory path to change to (e.g., '..', 'subfolder', '/absolute/path'). Empty string goes to home directory."},
     required=["path"]
 )
-def change_directory(path: str, session) -> str:
+def change_directory(path: str, session=None) -> str:
     # Handle empty path (go to home directory)
     if not path:
         try:

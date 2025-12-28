@@ -60,7 +60,15 @@ def run(prompt: str, session: Session) -> None:
 
         # Execute tools and add results
         for tc in tool_calls:
-            args = json.loads(tc["arguments"])
+            try:
+                args = json.loads(tc.get("arguments", "{}"))
+            except json.JSONDecodeError as e:
+                session.conversation.append({
+                    "role": "tool",
+                    "tool_call_id": tc["id"],
+                    "content": f"Error: Invalid JSON arguments: {e}"
+                })
+                continue
 
             # Print tool name with args
             if args:

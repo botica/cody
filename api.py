@@ -36,7 +36,15 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
 
     with requests.post(OPENROUTER_URL, headers=headers, json=payload, stream=True) as response:
         if response.status_code != 200:
-            print(f"Error {response.status_code}: {response.text}")
+            error_msg = f"API Error {response.status_code}"
+            try:
+                error_data = response.json()
+                if "error" in error_data:
+                    error_msg += f": {error_data['error'].get('message', error_data['error'])}"
+            except Exception:
+                error_msg += f": {response.text[:200]}"
+
+            print(f"[error] {error_msg}")
             return "", [], None
 
         buffer = ""

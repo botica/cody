@@ -16,7 +16,7 @@ from . import tool
     },
     required=["path"]
 )
-def read_file(path: str, session, offset=None, limit=None) -> str:
+def read_file(path: str, offset=None, limit=None, session=None) -> str:
     try:
         full_path = os.path.abspath(os.path.join(session.cwd, path))
         with open(full_path, encoding="utf-8", errors="replace") as f:
@@ -85,7 +85,7 @@ def list_directory(path: str = ".", session=None) -> str:
     },
     required=["path", "content"]
 )
-def write_file(path: str, content: str, session) -> str:
+def write_file(path: str, content: str, session=None) -> str:
     try:
         full_path = os.path.abspath(os.path.join(session.cwd, path))
         Path(full_path).parent.mkdir(parents=True, exist_ok=True)
@@ -106,7 +106,7 @@ def write_file(path: str, content: str, session) -> str:
     },
     required=["path", "old_string", "new_string"]
 )
-def edit_file(path: str, old_string: str, new_string: str, session) -> str:
+def edit_file(path: str, old_string: str, new_string: str, session=None) -> str:
     try:
         full_path = os.path.abspath(os.path.join(session.cwd, path))
         with open(full_path, "r", encoding="utf-8") as f:
@@ -136,7 +136,7 @@ def edit_file(path: str, old_string: str, new_string: str, session) -> str:
     params={"path": "Path to the file or empty directory to delete"},
     required=["path"]
 )
-def delete_file(path: str, session) -> str:
+def delete_file(path: str, session=None) -> str:
     try:
         full_path = os.path.abspath(os.path.join(session.cwd, path))
         p = Path(full_path)

@@ -5,13 +5,15 @@ OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 #MODEL = "google/gemini-3-flash-preview"
+#MODEL="x-ai/grok-code-fast-1"
 MODEL = "minimax/minimax-m2.1"
 #MODEL = "deepseek/deepseek-r1"
 
-# Pricing per million tokens (input, output)
+# Pricing per million tokens (input, output) 
 MODEL_PRICING = {
     "google/gemini-3-flash-preview": (0.50, 3.00),
     "minimax/minimax-m2.1": (0.30, 1.20),
+    "x-ai/grok-code-fast-1": (0.20, 1.50),
 }
 
 SYSTEM_PROMPT = """
