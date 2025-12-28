@@ -1,6 +1,11 @@
 <div align="center">
-  <img src="./banks.png" alt="strap in" width="200px">
+  <img src="./imgs/banks.png" alt="strap in" width="200px">
 </div>
-<p>cody is a command-line agent using gpt5.2 (or openrouter) for inference</p>
-<p>feel free to give him a whirl --> python agent.py</p>
+<p>cody is a command-line agent using openrouter models for inference.</p>
+<p>reasoning models output reasoning to console</p>
+<p>feel free to give him a whirl --> python agent.py after install the reqs</p>
 <p>uses <a href="https://github.com/BurntSushi/ripgrep">ripgrep</a> for search</p>
+<br>
+<img src="./imgs/screen1.png" width="400px">
+<br>
+<img src="./imgs/screen2.png" width="400px">
