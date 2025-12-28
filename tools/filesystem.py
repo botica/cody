@@ -8,15 +8,51 @@ from . import tool
 
 @tool(
     name="read_file",
-    description="Read the contents of a file",
-    params={"path": "Path to the file to read"},
+    description="Read the contents of a file. Optionally specify offset (starting line, 1-indexed) and limit (number of lines) for large files.",
+    params={
+        "path": "Path to the file to read",
+        "offset": {"type": "integer", "description": "Starting line number (1-indexed, optional)"},
+        "limit": {"type": "integer", "description": "Maximum number of lines to read (optional)"}
+    },
     required=["path"]
 )
-def read_file(path: str, session) -> str:
+def read_file(path: str, session, offset=None, limit=None) -> str:
     try:
         full_path = os.path.abspath(os.path.join(session.cwd, path))
         with open(full_path, encoding="utf-8", errors="replace") as f:
-            return f.read()
+            lines = f.readlines()
+
+        total_lines = len(lines)
+
+        # Coerce to int if strings (models sometimes send strings despite schema)
+        if offset is not None:
+            offset = int(offset)
+        if limit is not None:
+            limit = int(limit)
+
+        # Apply offset (1-indexed)
+        if offset is not None:
+            start = max(0, offset - 1)
+            lines = lines[start:]
+        else:
+            start = 0
+
+        # Apply limit
+        if limit is not None:
+            lines = lines[:limit]
+
+        # Format with line numbers
+        result_lines = []
+        for i, line in enumerate(lines):
+            line_num = start + i + 1
+            result_lines.append(f"{line_num:>6}| {line.rstrip()}")
+
+        header = f"[{total_lines} lines total]"
+        if offset or limit:
+            showing = f"[showing lines {start + 1}-{start + len(lines)}]"
+            header = f"{header} {showing}"
+
+        return f"{header}\n" + "\n".join(result_lines)
     except FileNotFoundError:
         return f"Error: File not found: {path}"
     except Exception as e:

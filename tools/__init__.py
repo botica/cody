@@ -1,5 +1,6 @@
 """Tool registry and execution system."""
 
+import inspect
 import json
 import sys
 from typing import Callable
@@ -97,11 +98,21 @@ def execute_tool(name: str, args: dict, session) -> str:
     if not handler:
         return f"Unknown tool: {name}"
 
+    # Filter args to only include parameters the handler accepts
+    sig = inspect.signature(handler)
+    valid_params = set(sig.parameters.keys())
+    filtered_args = {k: v for k, v in args.items() if k in valid_params}
+
+    # Warn about ignored parameters (helps debug model hallucinations)
+    ignored = set(args.keys()) - set(filtered_args.keys()) - {"session"}
+    if ignored:
+        print(f"[warning] Ignoring unknown parameters for {name}: {ignored}")
+
     try:
-        return handler(session=session, **args)
+        return handler(session=session, **filtered_args)
     except TypeError:
         # Handler doesn't need session
-        return handler(**args)
+        return handler(**filtered_args)
 
 
 # Import all tool modules to register them
