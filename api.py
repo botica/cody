@@ -96,7 +96,7 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
                         current_text += content
                         at_line_start = content.endswith('\n')
 
-                    # Handle tool calls
+                    # Handle tool calls (accumulate silently, print in agent.py)
                     if "tool_calls" in delta:
                         for tc in delta["tool_calls"]:
                             idx = tc["index"]
@@ -106,11 +106,6 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
                                     "name": tc.get("function", {}).get("name", ""),
                                     "arguments": ""
                                 }
-                                if not at_line_start:
-                                    print()
-                                print(f"[{tool_calls_by_index[idx]['name']}] ", end="", flush=True)
-                                at_line_start = False
-                                had_reasoning = False
 
                             if "function" in tc and "arguments" in tc["function"]:
                                 tool_calls_by_index[idx]["arguments"] += tc["function"]["arguments"]

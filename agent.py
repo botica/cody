@@ -11,7 +11,7 @@ if sys.platform == 'win32':
 
 from config import Session, MODEL
 from api import stream_completion
-from tools import execute_tool, TurnCancelled
+from tools import execute_tool
 
 
 def run(prompt: str, session: Session) -> None:
@@ -53,33 +53,29 @@ def run(prompt: str, session: Session) -> None:
         session.conversation.append(assistant_msg)
 
         # Execute tools and add results
-        try:
-            for tc in tool_calls:
-                args = json.loads(tc["arguments"])
+        for tc in tool_calls:
+            args = json.loads(tc["arguments"])
 
-                # Print tool args for visibility
-                if args:
-                    args_str = ", ".join(f"{k}={repr(v)[:50]}" for k, v in args.items())
-                    print(f"({args_str})")
-                else:
-                    print()
+            # Print tool name with args
+            if args:
+                args_str = " ".join(f"{k}={repr(v)[:60]}" for k, v in args.items())
+                print(f"[{tc['name']}] {args_str}")
+            else:
+                print(f"[{tc['name']}]")
 
-                result = execute_tool(tc["name"], args, session)
+            result = execute_tool(tc["name"], args, session)
 
-                session.conversation.append({
-                    "role": "tool",
-                    "tool_call_id": tc["id"],
-                    "content": result
-                })
-        except TurnCancelled:
-            print("[turn cancelled]")
-            break
+            session.conversation.append({
+                "role": "tool",
+                "tool_call_id": tc["id"],
+                "content": result
+            })
 
 
 def main():
     """Main entry point."""
     session = Session()
-    print(f"Agent Cody Banks - license to code - {MODEL}")
+    print(f"Cody [{MODEL}]")
 
     while True:
         try:

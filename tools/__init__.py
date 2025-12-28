@@ -8,10 +8,6 @@ from typing import Callable
 _tools: dict[str, dict] = {}
 _handlers: dict[str, Callable] = {}
 
-class TurnCancelled(Exception):
-    """Raised when user presses Escape to cancel the current turn."""
-    pass
-
 # Tools that require user confirmation
 CONFIRM_TOOLS = {"write_file", "edit_file", "delete_file", "fetch_webpage", "web_search", "run_bash", "change_directory"}
 
