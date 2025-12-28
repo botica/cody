@@ -1,9 +1,7 @@
+"""Cody - AI coding agent with tool use."""
+
 import json
-import os
-import subprocess
 import sys
-from pathlib import Path
-import requests
 
 # Fix UTF-8 output on Windows
 if sys.platform == 'win32':
@@ -11,678 +9,32 @@ if sys.platform == 'win32':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = 'minimax/minimax-m2.1'
-#MODEL = 'deepseek/deepseek-r1'
-
-# Pricing per million tokens (input, output)
-MODEL_PRICING = {
-    "minimax/minimax-m2.1": (0.30, 1.20),
-}
-
-# Track token usage and cost across the conversation
-token_usage = {"input": 0, "output": 0, "cost": 0.0}
-
-SYSTEM_PROMPT = '''
-You are an AI agent named Cody. You assist the user with general tasks, coding tasks, and have tools available for usage.
-Use your tools efficiently to complete the task.
-'''.strip()
-
-# Track current working directory across commands
-current_working_dir = os.getcwd()
-
-# Auto-confirm for current turn (reset each turn)
-auto_confirm_turn = False
-
-tools = [
-    {
-        "type": "function",
-        "name": "read_file",
-        "description": "Read the contents of a file",
-        "parameters": {
-            "type": "object",
-            "properties": {"path": {"type": "string"}},
-            "required": ["path"]
-        }
-    },
-    {
-        "type": "function",
-        "name": "list_directory",
-        "description": "List files and directories in a path. If no path specified, use the current directory ('.').",
-        "parameters": {
-            "type": "object",
-            "properties": {"path": {"type": "string"}}
-        }
-    },
-    {
-        "type": "function",
-        "name": "search",
-        "description": "Search for a pattern in files and return matching lines with file paths and line numbers. If no path specified, search the current directory ('.').",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "pattern": {
-                    "type": "string",
-                    "description": "The regex pattern to search for"
-                },
-                "path": {
-                    "type": "string",
-                    "description": "Directory to search in (default: current directory)"
-                },
-                "file_pattern": {
-                    "type": "string",
-                    "description": "Glob pattern for files to search (e.g., '*.py', '*.txt')"
-                }
-            },
-            "required": ["pattern"]
-        }
-    },
-    {
-        "type": "function",
-        "name": "write_file",
-        "description": "Create a new file or overwrite an existing file with content",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Path to the file to create/overwrite"
-                },
-                "content": {
-                    "type": "string",
-                    "description": "Content to write to the file"
-                }
-            },
-            "required": ["path", "content"]
-        }
-    },
-    {
-        "type": "function",
-        "name": "edit_file",
-        "description": "Edit a file by replacing a specific string with new content. The old_string must match exactly.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Path to the file to edit"
-                },
-                "old_string": {
-                    "type": "string",
-                    "description": "The exact string to find and replace"
-                },
-                "new_string": {
-                    "type": "string",
-                    "description": "The string to replace it with"
-                }
-            },
-            "required": ["path", "old_string", "new_string"]
-        }
-    },
-    {
-        "type": "function",
-        "name": "delete_file",
-        "description": "Delete a file or empty directory",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Path to the file or empty directory to delete"
-                }
-            },
-            "required": ["path"]
-        }
-    },
-    {
-        "type": "function",
-        "name": "fetch_webpage",
-        "description": "Fetch a webpage and extract its text content. Use use_browser=true for JavaScript-heavy sites.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "url": {
-                    "type": "string",
-                    "description": "The URL to fetch"
-                },
-                "use_browser": {
-                    "type": "boolean",
-                    "description": "Use headless browser (Playwright) for JS-rendered content. Default: false"
-                }
-            },
-            "required": ["url"]
-        }
-    },
-    {
-        "type": "function",
-        "name": "web_search",
-        "description": "Search the web using DuckDuckGo. Returns titles, URLs, and snippets of search results.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The search query"
-                }
-            },
-            "required": ["query"]
-        }
-    },
-    {
-        "type": "function",
-        "name": "run_bash",
-        "description": "Execute a bash/shell command and return the output. Can run Python scripts, git commands, npm, etc.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "command": {
-                    "type": "string",
-                    "description": "The command to execute (e.g., 'python script.py', 'git status', 'npm install')"
-                }
-            },
-            "required": ["command"]
-        }
-    },
-    {
-        "type": "function",
-        "name": "change_directory",
-        "description": "Change the current working directory. Affects where subsequent commands run.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "The directory path to change to (e.g., '..', 'subfolder', '/absolute/path'). Empty string goes to home directory."
-                }
-            },
-            "required": ["path"]
-        }
-    }
-]
+from config import Session, MODEL
+from api import stream_completion
+from tools import execute_tool, TurnCancelled
 
 
-def read_file(path: str) -> str:
-    try:
-        # Resolve path relative to current working directory
-        full_path = os.path.abspath(os.path.join(current_working_dir, path))
-        with open(full_path, encoding="utf-8", errors="replace") as f:
-            return f.read()
-    except FileNotFoundError:
-        return f"Error: File not found: {path}"
-    except Exception as e:
-        return f"Error reading file: {e}"
-
-
-def list_directory(path: str = ".") -> str:
-    try:
-        # Resolve path relative to current working directory
-        full_path = os.path.abspath(os.path.join(current_working_dir, path))
-        return "\n".join(os.listdir(full_path))
-    except FileNotFoundError:
-        return f"Error: Directory not found: {path}"
-    except Exception as e:
-        return f"Error listing directory: {e}"
-
-
-def search(pattern: str, path: str = ".", file_pattern: str | None = None) -> str:
-    try:
-        # Resolve path relative to current working directory
-        full_path = os.path.abspath(os.path.join(current_working_dir, path))
-        cmd = ["rg", pattern, full_path, "--color=never", "--max-count=50"]
-        if file_pattern:
-            cmd.extend(["-g", file_pattern])
-
-        result = subprocess.run(cmd, capture_output=True, encoding="utf-8", timeout=10)
-
-        if result.returncode == 0:
-            return result.stdout.strip()
-        elif result.returncode == 1:
-            return "No matches found"
-        else:
-            return f"Search error: {result.stderr}"
-    except FileNotFoundError:
-        return "Error: ripgrep (rg) is not installed or not on PATH."
-    except subprocess.TimeoutExpired:
-        return "Error: Search timed out"
-    except Exception as e:
-        return f"Error: {e}"
-
-
-def write_file(path: str, content: str) -> str:
-    try:
-        # Resolve path relative to current working directory
-        full_path = os.path.abspath(os.path.join(current_working_dir, path))
-        Path(full_path).parent.mkdir(parents=True, exist_ok=True)
-        with open(full_path, "w", encoding="utf-8") as f:
-            f.write(content)
-        return f"Successfully wrote {len(content)} bytes to {path}"
-    except Exception as e:
-        return f"Error writing file: {e}"
-
-
-def edit_file(path: str, old_string: str, new_string: str) -> str:
-    try:
-        # Resolve path relative to current working directory
-        full_path = os.path.abspath(os.path.join(current_working_dir, path))
-        with open(full_path, "r", encoding="utf-8") as f:
-            content = f.read()
-
-        if old_string not in content:
-            return f"Error: old_string not found in {path}"
-
-        count = content.count(old_string)
-        if count > 1:
-            return f"Error: old_string appears {count} times in {path}. Must be unique."
-
-        new_content = content.replace(old_string, new_string, 1)
-        with open(full_path, "w", encoding="utf-8") as f:
-            f.write(new_content)
-
-        return f"Successfully edited {path}"
-    except FileNotFoundError:
-        return f"Error: File not found: {path}"
-    except Exception as e:
-        return f"Error editing file: {e}"
-
-
-def delete_file(path: str) -> str:
-    try:
-        # Resolve path relative to current working directory
-        full_path = os.path.abspath(os.path.join(current_working_dir, path))
-        p = Path(full_path)
-        if p.is_file():
-            p.unlink()
-            return f"Successfully deleted file: {path}"
-        elif p.is_dir():
-            p.rmdir()
-            return f"Successfully deleted directory: {path}"
-        else:
-            return f"Error: Path not found: {path}"
-    except OSError as e:
-        return f"Error deleting: {e}"
-
-
-def fetch_webpage(url: str, use_browser: bool = False) -> str:
-    def get_headers():
-        return {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept-Encoding": "gzip, deflate, br",
-            "DNT": "1",
-            "Connection": "keep-alive",
-            "Upgrade-Insecure-Requests": "1",
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "none",
-            "Sec-Fetch-User": "?1",
-            "Cache-Control": "max-age=0",
-        }
-
-    def fetch_with_browser(url: str) -> str:
-        from playwright.sync_api import sync_playwright
-        print("[browser] launching playwright firefox", end="", flush=True)
-        with sync_playwright() as p:
-            browser = p.firefox.launch(headless=True)
-            context = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-                viewport={"width": 1920, "height": 1080},
-                locale="en-US",
-                timezone_id="America/New_York",
-            )
-            page = context.new_page()
-            page.goto(url, timeout=30000, wait_until="load")
-            text = page.inner_text("body")
-            browser.close()
-        print(" done")
-        return text
-
-    def fetch_with_requests(url: str) -> str:
-        import requests
-        from bs4 import BeautifulSoup
-        session = requests.Session()
-        headers = get_headers()
-        response = session.get(url, timeout=15, headers=headers)
-        response.raise_for_status()
-        print(f"[requests] status={response.status_code}, parsing...", end="", flush=True)
-
-        soup = BeautifulSoup(response.text, "html.parser")
-        for tag in soup(["script", "style", "nav", "footer", "header"]):
-            tag.decompose()
-        text = soup.get_text(separator="\n", strip=True)
-        print(" done")
-        return text
-
-    def process_text(text: str) -> str:
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-        text = "\n".join(lines)
-        print(f"{len(lines)} lines, {len(text)} chars")
-        return text
-
-    try:
-        if use_browser:
-            text = fetch_with_browser(url)
-            return process_text(text)
-
-        # Try requests first, fall back to browser on failure
-        try:
-            text = fetch_with_requests(url)
-            return process_text(text)
-        except Exception as req_err:
-            print(f"{req_err}")
-            print("retrying with playwright firefox")
-            try:
-                text = fetch_with_browser(url)
-                return process_text(text)
-            except Exception as browser_err:
-                print(f"playwright failed: {browser_err}")
-                return f"error fetching {url}: requests failed ({req_err}), browser also failed ({browser_err})"
-    except Exception as e:
-        print(f"{e}")
-        return f"error fetching {url}: {e}"
-
-
-def web_search(query: str) -> str:
-    try:
-        from ddgs import DDGS
-
-        print(f"[search] querying '{query}'")
-        results = []
-        with DDGS() as ddgs:
-            for r in ddgs.text(query, max_results=5):
-                title = r.get("title", "")
-                href = r.get("href", "")
-                body = r.get("body", "")
-                print(f"{title}")
-                results.append(f"- {title}\n  {href}\n  {body}")
-
-        if not results:
-            print("(no results)")
-            return "No search results found."
-
-        return "\n\n".join(results)
-    except Exception as e:
-        print(f"error: {e}")
-        return f"Error searching: {e}"
-
-
-def change_directory(path: str) -> str:
-    global current_working_dir
-
-    # Handle empty path (go to home directory)
-    if not path:
-        try:
-            current_working_dir = os.path.expanduser("~")
-            return f"Changed directory to {current_working_dir}"
-        except Exception as e:
-            return f"Error: {e}"
-
-    # Resolve the new path relative to current working directory
-    try:
-        new_path = os.path.abspath(os.path.join(current_working_dir, path))
-        if os.path.isdir(new_path):
-            current_working_dir = new_path
-            return f"Changed directory to {current_working_dir}"
-        else:
-            return f"Error: Directory not found: {new_path}"
-    except Exception as e:
-        return f"Error: {e}"
-
-
-def run_bash(command: str) -> str:
-    # Handle pwd command to show current directory
-    if command.strip() == "pwd":
-        return current_working_dir
-
-    # Run commands in the current working directory with real-time output
-    try:
-        env = os.environ.copy()
-        env["PYTHONUNBUFFERED"] = "1"
-
-        process = subprocess.Popen(
-            command,
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            cwd=current_working_dir,
-            env=env
-        )
-
-        output_lines = []
-        while True:
-            line = process.stdout.readline()
-            if not line and process.poll() is not None:
-                break
-            if line:
-                print(line, end="", flush=True)
-                output_lines.append(line)
-
-        output = "".join(output_lines)
-        return output if output else f"command executed successfully (exit code {process.returncode})"
-    except subprocess.TimeoutExpired:
-        process.kill()
-        return "error: command timed out after 30 seconds"
-    except Exception as e:
-        return f"Error executing command: {e}"
-
-
-CONFIRM_TOOLS = {"write_file", "edit_file", "delete_file", "fetch_webpage", "web_search", "run_bash", "change_directory"}
-
-
-def confirm_action(name: str, args: dict) -> bool:
-    """Prompt user to confirm destructive actions. Returns True if confirmed."""
-    global auto_confirm_turn
-
-    if auto_confirm_turn:
-        return True
-
-    if name == "edit_file":
-        detail = f"'{args.get('path')}' (replacing '{args.get('old_string', '')}')"
-    elif name == "fetch_webpage":
-        detail = f"'{args.get('url')}'"
-    elif name == "web_search":
-        detail = f"'{args.get('query')}'"
-    elif name == "run_bash":
-        detail = f"'{args.get('command')}'"
-    elif name == "change_directory":
-        detail = f"'{args.get('path')}'"
-    else:
-        detail = f"'{args.get('path', 'unknown')}'"
-
-    print(f"\nConfirm {name} {detail}? [y/n/!] ", end="", flush=True)
-    try:
-        response = input().strip().lower()
-        if response == "!":
-            auto_confirm_turn = True
-            return True
-        return response in ("y", "yes")
-    except (KeyboardInterrupt, EOFError):
-        print()
-        sys.exit(0)
-
-
-def execute_tool(name: str, args: dict) -> str:
-    if name in CONFIRM_TOOLS and not confirm_action(name, args):
-        return "tool call denied. find another approach."
-
-    if name == "read_file":
-        return read_file(args["path"])
-    elif name == "list_directory":
-        return list_directory(args.get("path", "."))
-    elif name == "search":
-        return search(args["pattern"], args.get("path", "."), args.get("file_pattern"))
-    elif name == "write_file":
-        return write_file(args["path"], args["content"])
-    elif name == "edit_file":
-        return edit_file(args["path"], args["old_string"], args["new_string"])
-    elif name == "delete_file":
-        return delete_file(args["path"])
-    elif name == "fetch_webpage":
-        return fetch_webpage(args["url"], args.get("use_browser", False))
-    elif name == "web_search":
-        return web_search(args["query"])
-    elif name == "run_bash":
-        return run_bash(args["command"])
-    elif name == "change_directory":
-        return change_directory(args["path"])
-    else:
-        return f"Unknown tool: {name}"
-
-
-def run(prompt: str, conversation: list) -> None:
-    global auto_confirm_turn
-    auto_confirm_turn = False  # Reset at start of each turn
-
-    conversation.append({"role": "user", "content": prompt})
-
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    # Convert tools to OpenAI chat completions format
-    openai_tools = [
-        {
-            "type": "function",
-            "function": {
-                "name": t["name"],
-                "description": t["description"],
-                "parameters": t["parameters"]
-            }
-        }
-        for t in tools
-    ]
+def run(prompt: str, session: Session) -> None:
+    """Process a user prompt and handle the agent loop."""
+    session.reset_turn()
+    session.conversation.append({"role": "user", "content": prompt})
 
     while True:
-        payload = {
-            "model": MODEL,
-            "messages": conversation,
-            "tools": openai_tools,
-            "stream": True,
-            "stream_options": {"include_usage": True}  # Request token usage in response
-        }
-
-        tool_calls_by_index = {}
-        current_text = ""
-        turn_usage = None
-        reasoning_details = None  # Preserve reasoning blocks for models that use them
-
-        with requests.post(OPENROUTER_URL, headers=headers, json=payload, stream=True) as response:
-            if response.status_code != 200:
-                print(f"Error {response.status_code}: {response.text}")
-                return
-            buffer = ""
-
-            for chunk in response.iter_content(chunk_size=1024, decode_unicode=True):
-                buffer += chunk
-
-                while True:
-                    line_end = buffer.find('\n')
-                    if line_end == -1:
-                        break
-
-                    line = buffer[:line_end].strip()
-                    buffer = buffer[line_end + 1:]
-
-                    if not line.startswith('data: '):
-                        continue
-
-                    data = line[6:]
-                    if data == '[DONE]':
-                        break
-
-                    try:
-                        data_obj = json.loads(data)
-
-                        # Capture usage if present
-                        if "usage" in data_obj:
-                            turn_usage = data_obj["usage"]
-
-                        # Skip if no choices (usage-only chunk)
-                        if not data_obj.get("choices"):
-                            continue
-
-                        delta = data_obj["choices"][0].get("delta", {})
-
-                        # Debug: uncomment to see what fields are in delta
-                        # if delta: print(f"\n[DEBUG delta keys: {list(delta.keys())}]", end="", flush=True)
-
-                        # Handle reasoning details (for models like minimax that use reasoning)
-                        if "reasoning_details" in data_obj["choices"][0].get("message", {}):
-                            reasoning_details = data_obj["choices"][0]["message"]["reasoning_details"]
-                        # Also check in delta for streaming
-                        if "reasoning_details" in delta:
-                            reasoning_details = delta["reasoning_details"]
-
-                        # Handle streaming reasoning content (deepseek-r1, etc.)
-                        reasoning = delta.get("reasoning") or delta.get("reasoning_content")
-                        if reasoning:
-                            print(f"\033[90m{reasoning}\033[0m", end="", flush=True)  # Gray text for thinking
-
-                        # Handle text content
-                        content = delta.get("content")
-                        if content:
-                            print(content, end="", flush=True)
-                            current_text += content
-
-                        # Handle tool calls
-                        if "tool_calls" in delta:
-                            for tc in delta["tool_calls"]:
-                                idx = tc["index"]
-                                if idx not in tool_calls_by_index:
-                                    tool_calls_by_index[idx] = {
-                                        "id": tc.get("id", ""),
-                                        "name": tc.get("function", {}).get("name", ""),
-                                        "arguments": ""
-                                    }
-                                    if current_text:
-                                        print()
-                                    print(f"[{tool_calls_by_index[idx]['name']}] ", end="", flush=True)
-
-                                # Accumulate function arguments
-                                if "function" in tc and "arguments" in tc["function"]:
-                                    tool_calls_by_index[idx]["arguments"] += tc["function"]["arguments"]
-
-                    except json.JSONDecodeError:
-                        pass
-
-        if current_text:
-            print()
-
-        # Print token usage if available
-        if turn_usage:
-            inp = turn_usage.get("prompt_tokens", 0)
-            out = turn_usage.get("completion_tokens", 0)
-            token_usage["input"] += inp
-            token_usage["output"] += out
-
-            # Calculate cost if pricing available
-            pricing = MODEL_PRICING.get(MODEL)
-            if pricing:
-                turn_cost = (inp * pricing[0] + out * pricing[1]) / 1_000_000
-                token_usage["cost"] += turn_cost
-                print(f"[tokens] +{inp:,} in, +{out:,} out (${turn_cost:.4f}) | session: ${token_usage['cost']:.4f}")
-            else:
-                print(f"[tokens] +{inp:,} in, +{out:,} out | session: {token_usage['input']:,} in, {token_usage['output']:,} out")
-
-        # Process completed tool calls
-        tool_calls = list(tool_calls_by_index.values())
+        text, tool_calls, reasoning_details = stream_completion(session.conversation, session)
 
         if not tool_calls:
-            if current_text:
-                msg = {"role": "assistant", "content": current_text}
-                if reasoning_details:  # Only if non-empty
+            # No tools called - conversation turn complete
+            if text:
+                msg = {"role": "assistant", "content": text}
+                if reasoning_details:
                     msg["reasoning_details"] = reasoning_details
-                conversation.append(msg)
+                session.conversation.append(msg)
             break
 
         # Build assistant message with tool calls
         assistant_msg = {
             "role": "assistant",
-            "content": current_text or None,
+            "content": text or None,
             "tool_calls": [
                 {
                     "id": tc["id"],
@@ -695,39 +47,50 @@ def run(prompt: str, conversation: list) -> None:
                 for tc in tool_calls
             ]
         }
-        # Preserve reasoning_details for models that use reasoning tokens
-        if reasoning_details:  # Only if non-empty
+        if reasoning_details:
             print(f"[reasoning] captured {len(reasoning_details)} blocks")
             assistant_msg["reasoning_details"] = reasoning_details
-        conversation.append(assistant_msg)
+        session.conversation.append(assistant_msg)
 
         # Execute tools and add results
-        for tc in tool_calls:
-            args = json.loads(tc["arguments"])
+        try:
+            for tc in tool_calls:
+                args = json.loads(tc["arguments"])
 
-            # Print tool args for visibility
-            if args:
-                args_str = ", ".join(f"{k}={repr(v)[:50]}" for k, v in args.items())
-                print(f"({args_str})")
-            else:
-                print()
+                # Print tool args for visibility
+                if args:
+                    args_str = ", ".join(f"{k}={repr(v)[:50]}" for k, v in args.items())
+                    print(f"({args_str})")
+                else:
+                    print()
 
-            result = execute_tool(tc["name"], args)
+                result = execute_tool(tc["name"], args, session)
 
-            conversation.append({
-                "role": "tool",
-                "tool_call_id": tc["id"],
-                "content": result
-            })
+                session.conversation.append({
+                    "role": "tool",
+                    "tool_call_id": tc["id"],
+                    "content": result
+                })
+        except TurnCancelled:
+            print("[turn cancelled]")
+            break
 
 
-if __name__ == "__main__":
-    conversation = [{"role": "system", "content": SYSTEM_PROMPT}]
+def main():
+    """Main entry point."""
+    session = Session()
+    print(f"Agent Cody Banks - license to code - {MODEL}")
+
     while True:
         try:
             prompt = input("> ")
             if prompt.strip():
-                run(prompt, conversation)
+                print()  # Newline after prompt
+                run(prompt, session)
         except (KeyboardInterrupt, EOFError):
             print()
             sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()
