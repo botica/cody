@@ -12,7 +12,7 @@ if sys.platform == 'win32':
 
 SYSTEM_PROMPT = """
 You are an AI agent named Cody. You assist the user with general tasks, coding tasks, and have tools available for usage.
-Use your tools efficiently to complete the task.
+Use your tools to complete the task. When searching the web, fetch at least one page for real content.
 """.strip()
 
 
@@ -50,17 +50,16 @@ def run(prompt: str, session: Session) -> None:
                 session.conversation.append(msg)
             break
 
-        def build_tool_call(tc, is_first=False):
-            func_obj = {"name": tc["name"], "arguments": tc["arguments"]}
-            if "gemini" in MODEL and is_first:
-                func_obj["thought_signature"] = "placeholder"
-            return {"id": tc["id"], "type": "function", "function": func_obj}
+        def build_tool_call(tc):
+            return {
+                "id": tc["id"],
+                "type": "function",
+                "function": {"name": tc["name"], "arguments": tc["arguments"]}
+            }
 
-        assistant_msg = {
-            "role": "assistant",
-            "content": text or None,
-            "tool_calls": [build_tool_call(tc, i == 0) for i, tc in enumerate(tool_calls)]
-        }
+        assistant_msg = {"role": "assistant", "tool_calls": [build_tool_call(tc) for tc in tool_calls]}
+        if text:
+            assistant_msg["content"] = text
         if reasoning_details:
             print(f"[reasoning] captured {len(reasoning_details)} blocks")
             assistant_msg["reasoning_details"] = reasoning_details
