@@ -1,11 +1,10 @@
-"""Cody - terminal buddy with toolzz"""
+"""Cody (from the movie) terminal agent with tool"""
 
 import json
 import os
 import sys
 from dataclasses import dataclass, field
 
-# Fix UTF-8 output on Windows
 if sys.platform == 'win32':
     import io
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
@@ -19,7 +18,6 @@ Use your tools efficiently to complete the task.
 
 @dataclass
 class Session:
-    """Holds all mutable state for a conversation session."""
     cwd: str = field(default_factory=os.getcwd)
     token_usage: dict = field(default_factory=lambda: {"input": 0, "output": 0, "cost": 0.0})
     auto_confirm_turn: bool = False
@@ -33,16 +31,11 @@ class Session:
         self.auto_confirm_turn = False
 
 
-# =============================================================================
-# Agent Loop
-# =============================================================================
-
 from api import stream_completion, MODEL
 from tools import execute_tool
 
 
 def run(prompt: str, session: Session) -> None:
-    """Process a user prompt and handle the agent loop."""
     session.reset_turn()
     session.conversation.append({"role": "user", "content": prompt})
 
@@ -57,7 +50,6 @@ def run(prompt: str, session: Session) -> None:
                 session.conversation.append(msg)
             break
 
-        # Build assistant message with tool calls
         def build_tool_call(tc, is_first=False):
             func_obj = {"name": tc["name"], "arguments": tc["arguments"]}
             if "gemini" in MODEL and is_first:
@@ -74,7 +66,6 @@ def run(prompt: str, session: Session) -> None:
             assistant_msg["reasoning_details"] = reasoning_details
         session.conversation.append(assistant_msg)
 
-        # Execute tools and add results
         for tc in tool_calls:
             try:
                 args = json.loads(tc.get("arguments", "{}"))

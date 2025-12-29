@@ -22,12 +22,6 @@ MODEL_PRICING = {  # per million tokens (input, output)
 
 
 def stream_completion(conversation: list, session) -> tuple[str, list[dict], dict | None]:
-    """
-    Stream a completion from OpenRouter.
-
-    Returns:
-        tuple: (text_content, tool_calls, reasoning_details)
-    """
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json"
@@ -45,8 +39,8 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
     current_text = ""
     turn_usage = None
     reasoning_details = None
-    at_line_start = True  # Track cursor position to avoid extra newlines
-    had_reasoning = False  # Track if we need newline before content
+    at_line_start = True
+    had_reasoning = False
 
     with requests.post(OPENROUTER_URL, headers=headers, json=payload, stream=True) as response:
         if response.status_code != 200:
@@ -83,42 +77,36 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
                 try:
                     data_obj = json.loads(data)
 
-                    # Capture usage if present
                     if "usage" in data_obj:
                         turn_usage = data_obj["usage"]
 
-                    # Skip if no choices (usage-only chunk)
                     if not data_obj.get("choices"):
                         continue
 
                     delta = data_obj["choices"][0].get("delta", {})
 
-                    # Handle reasoning details (for models like minimax that use reasoning)
                     if "reasoning_details" in data_obj["choices"][0].get("message", {}):
                         reasoning_details = data_obj["choices"][0]["message"]["reasoning_details"]
                     if "reasoning_details" in delta:
                         reasoning_details = delta["reasoning_details"]
 
-                    # Handle streaming reasoning content (deepseek-r1, etc.)
                     reasoning = delta.get("reasoning") or delta.get("reasoning_content")
                     if reasoning:
                         print(f"\033[38;5;210m{reasoning}\033[0m", end="", flush=True)
                         at_line_start = reasoning.endswith('\n')
                         had_reasoning = True
 
-                    # Handle text content
                     content = delta.get("content")
                     if content:
                         if had_reasoning:
                             if not at_line_start:
                                 print()
-                            print()  # Blank line between reasoning and output
+                            print()
                             had_reasoning = False
                         print(content, end="", flush=True)
                         current_text += content
                         at_line_start = content.endswith('\n')
 
-                    # Handle tool calls (accumulate silently, print in agent.py)
                     if "tool_calls" in delta:
                         for tc in delta["tool_calls"]:
                             idx = tc["index"]
@@ -135,11 +123,9 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
                 except json.JSONDecodeError:
                     pass
 
-    # Newline after content if needed
     if current_text and not at_line_start:
         print()
 
-    # Print token usage
     if turn_usage:
         _print_usage(turn_usage, session)
 
@@ -148,7 +134,6 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
 
 
 def _print_usage(turn_usage: dict, session):
-    """Print and accumulate token usage."""
     inp = turn_usage.get("prompt_tokens", 0)
     out = turn_usage.get("completion_tokens", 0)
     session.token_usage["input"] += inp

@@ -1,4 +1,4 @@
-"""Tools for the AI agent."""
+"""Tools for cody"""
 
 import inspect
 import os
@@ -6,13 +6,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-
-# Tools requiring user confirmation
 CONFIRM_TOOLS = {"write_file", "edit_file", "delete_file", "fetch_webpage", "web_search", "run_bash", "change_directory"}
 
 
 def confirm_action(name: str, args: dict, session) -> bool:
-    """Prompt user to confirm destructive actions."""
     if session.auto_confirm_turn:
         return True
 
@@ -38,7 +35,6 @@ def confirm_action(name: str, args: dict, session) -> bool:
 
 
 def execute_tool(name: str, args: dict, session) -> str:
-    """Execute a tool by name."""
     if name in CONFIRM_TOOLS and not confirm_action(name, args, session):
         return "Tool call denied."
 
@@ -46,17 +42,12 @@ def execute_tool(name: str, args: dict, session) -> str:
     if not handler:
         return f"Unknown tool: {name}"
 
-    # Filter to valid params only
     sig = inspect.signature(handler)
     valid = set(sig.parameters.keys())
     filtered = {k: v for k, v in args.items() if k in valid}
 
     return handler(session=session, **filtered)
 
-
-# =============================================================================
-# Tool Implementations
-# =============================================================================
 
 def read_file(path: str, offset=None, limit=None, session=None) -> str:
     try:
@@ -240,10 +231,6 @@ def change_directory(path: str, session=None) -> str:
         return f"Error: {e}"
 
 
-# =============================================================================
-# Tool Registry
-# =============================================================================
-
 HANDLERS = {
     "read_file": read_file,
     "list_directory": list_directory,
@@ -333,5 +320,4 @@ SCHEMAS = [
 
 
 def get_tools_schema() -> list[dict]:
-    """Get tools in OpenAI function calling format."""
     return [{"type": "function", "function": s} for s in SCHEMAS]
