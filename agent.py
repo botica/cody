@@ -1,7 +1,9 @@
-"""Cody - AI coding agent with tool use."""
+"""Cody - terminal buddy with toolzz"""
 
 import json
+import os
 import sys
+from dataclasses import dataclass, field
 
 # Fix UTF-8 output on Windows
 if sys.platform == 'win32':
@@ -9,8 +11,33 @@ if sys.platform == 'win32':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
-from config import Session, MODEL
-from api import stream_completion
+SYSTEM_PROMPT = """
+You are an AI agent named Cody. You assist the user with general tasks, coding tasks, and have tools available for usage.
+Use your tools efficiently to complete the task.
+""".strip()
+
+
+@dataclass
+class Session:
+    """Holds all mutable state for a conversation session."""
+    cwd: str = field(default_factory=os.getcwd)
+    token_usage: dict = field(default_factory=lambda: {"input": 0, "output": 0, "cost": 0.0})
+    auto_confirm_turn: bool = False
+    conversation: list = field(default_factory=list)
+
+    def __post_init__(self):
+        if not self.conversation:
+            self.conversation = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+    def reset_turn(self):
+        self.auto_confirm_turn = False
+
+
+# =============================================================================
+# Agent Loop
+# =============================================================================
+
+from api import stream_completion, MODEL
 from tools import execute_tool
 
 
@@ -23,7 +50,6 @@ def run(prompt: str, session: Session) -> None:
         text, tool_calls, reasoning_details = stream_completion(session.conversation, session)
 
         if not tool_calls:
-            # No tools called - conversation turn complete
             if text:
                 msg = {"role": "assistant", "content": text}
                 if reasoning_details:
@@ -33,20 +59,10 @@ def run(prompt: str, session: Session) -> None:
 
         # Build assistant message with tool calls
         def build_tool_call(tc, is_first=False):
-            func_obj = {
-                "name": tc["name"],
-                "arguments": tc["arguments"]
-            }
-            # Gemini requires thought_signature for tool calls
-            # Use dummy signature if not provided (per Google docs)
+            func_obj = {"name": tc["name"], "arguments": tc["arguments"]}
             if "gemini" in MODEL and is_first:
                 func_obj["thought_signature"] = "placeholder"
-
-            return {
-                "id": tc["id"],
-                "type": "function",
-                "function": func_obj
-            }
+            return {"id": tc["id"], "type": "function", "function": func_obj}
 
         assistant_msg = {
             "role": "assistant",
@@ -70,7 +86,6 @@ def run(prompt: str, session: Session) -> None:
                 })
                 continue
 
-            # Print tool name with args
             if args:
                 args_str = " ".join(f"{k}={repr(v)[:60]}" for k, v in args.items())
                 print(f"[{tc['name']}] {args_str}")
@@ -78,7 +93,6 @@ def run(prompt: str, session: Session) -> None:
                 print(f"[{tc['name']}]")
 
             result = execute_tool(tc["name"], args, session)
-
             session.conversation.append({
                 "role": "tool",
                 "tool_call_id": tc["id"],
@@ -87,7 +101,6 @@ def run(prompt: str, session: Session) -> None:
 
 
 def main():
-    """Main entry point."""
     session = Session()
     print(f"Cody [{MODEL}]")
 
@@ -95,7 +108,7 @@ def main():
         try:
             prompt = input("> ")
             if prompt.strip():
-                print()  # Newline after prompt
+                print()
                 run(prompt, session)
         except (KeyboardInterrupt, EOFError):
             print()

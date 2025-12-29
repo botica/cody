@@ -1,10 +1,24 @@
 """OpenRouter API streaming and response handling."""
 
 import json
+import os
 import requests
 
-from config import OPENROUTER_API_KEY, OPENROUTER_URL, MODEL, MODEL_PRICING
 from tools import get_tools_schema
+
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+#MODEL = "google/gemini-3-flash-preview"
+#MODEL = "x-ai/grok-code-fast-1"
+MODEL = "minimax/minimax-m2.1"
+#MODEL = "deepseek/deepseek-r1"
+
+MODEL_PRICING = {  # per million tokens (input, output)
+    "google/gemini-3-flash-preview": (0.50, 3.00),
+    "minimax/minimax-m2.1": (0.30, 1.20),
+    "x-ai/grok-code-fast-1": (0.20, 1.50),
+}
 
 
 def stream_completion(conversation: list, session) -> tuple[str, list[dict], dict | None]:
@@ -124,8 +138,6 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
     # Newline after content if needed
     if current_text and not at_line_start:
         print()
-    if current_text:
-        print()  # Blank line before token line
 
     # Print token usage
     if turn_usage:
