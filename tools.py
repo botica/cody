@@ -77,7 +77,9 @@ def read_file(path: str, offset=None, limit=None, session=None) -> str:
 def list_directory(path: str = ".", session=None) -> str:
     try:
         full_path = os.path.abspath(os.path.join(session.cwd, path))
-        return "\n".join(os.listdir(full_path))
+        result = "\n".join(os.listdir(full_path))
+        print(result)
+        return result
     except Exception as e:
         return f"Error: {e}"
 

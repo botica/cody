@@ -90,16 +90,48 @@ def run(prompt: str, session: Session) -> None:
             })
 
 
+def get_input():
+    line = input("> ")
+
+    for delim in ('"""', '```'):
+        if line.strip() == delim:
+            # Just the delimiter
+            lines = []
+            while True:
+                l = input()
+                if l.strip() == delim:
+                    break
+                lines.append(l)
+            return "\n".join(lines)
+        elif line.rstrip().endswith(delim):
+            # Context before delimiter: "fix this error """
+            prefix = line.rstrip()[:-len(delim)].rstrip()
+            lines = []
+            while True:
+                l = input()
+                if l.strip() == delim:
+                    break
+                lines.append(l)
+            return prefix + "\n" + "\n".join(lines)
+
+    return line
+
+
 def main():
     session = Session()
     print(f"Cody [{MODEL}]")
+    print('Tip: Use """ or ``` for multi-line input')
 
     while True:
         try:
-            prompt = input("> ")
+            prompt = get_input()
             if prompt.strip():
                 print()
-                run(prompt, session)
+                try:
+                    run(prompt, session)
+                except KeyboardInterrupt:
+                    print("\n[interrupted]")
+                    continue
         except (KeyboardInterrupt, EOFError):
             print()
             sys.exit(0)

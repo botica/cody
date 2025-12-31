@@ -11,13 +11,17 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 #MODEL = "google/gemini-3-flash-preview"
 #MODEL = "x-ai/grok-code-fast-1"
-MODEL = "minimax/minimax-m2.1"
+#MODEL = "minimax/minimax-m2.1"
 #MODEL = "deepseek/deepseek-r1"
+MODEL = "openai/gpt-5.2"
 
 MODEL_PRICING = {  # per million tokens (input, output)
     "google/gemini-3-flash-preview": (0.50, 3.00),
     "minimax/minimax-m2.1": (0.30, 1.20),
     "x-ai/grok-code-fast-1": (0.20, 1.50),
+
+    # OpenAI pricing (per 1M tokens): $1.75 input / $14.00 output
+    "openai/gpt-5.2": (1.75, 14.00),
 }
 
 
