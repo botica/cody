@@ -70,6 +70,7 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
     had_reasoning = False
 
     with requests.post(OPENROUTER_URL, headers=headers, json=payload, stream=True) as response:
+        response.encoding = 'utf-8'  # Force UTF-8 (API returns UTF-8 but may not declare charset)
         if response.status_code != 200:
             error_msg = f"API Error {response.status_code}"
             try:
