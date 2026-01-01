@@ -96,26 +96,26 @@ def run(prompt: str, session: Session) -> None:
 def get_input():
     line = input("> ")
 
-    for delim in ('"""', '```'):
+    for delim in ('"""', "'''"):
+        prefix = ""
         if line.strip() == delim:
-            # Just the delimiter
-            lines = []
-            while True:
-                l = input()
-                if l.strip() == delim:
-                    break
-                lines.append(l)
-            return "\n".join(lines)
+            pass  # Just the delimiter
         elif line.rstrip().endswith(delim):
-            # Context before delimiter: "fix this error """
-            prefix = line.rstrip()[:-len(delim)].rstrip()
-            lines = []
-            while True:
-                l = input()
-                if l.strip() == delim:
-                    break
-                lines.append(l)
-            return prefix + "\n" + "\n".join(lines)
+            prefix = line.rstrip()[:-len(delim)].rstrip() + "\n"
+        else:
+            continue
+
+        # Collect lines until closing delimiter
+        lines = []
+        while True:
+            l = input()
+            if l.strip() == delim:
+                break
+            if l.rstrip().endswith(delim):
+                lines.append(l.rstrip()[:-len(delim)])
+                break
+            lines.append(l)
+        return prefix + "\n".join(lines)
 
     return line
 
@@ -162,7 +162,7 @@ def main():
     session = Session(cwd=cwd)
     print(f"Cody [{MODEL}]")
     print(f"cwd: {cwd}")
-    print('Tip: Use """ or ``` for multi-line input')
+    print("Tip: Use \"\"\" or ''' for multi-line input")
 
     while True:
         try:
