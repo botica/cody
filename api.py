@@ -151,7 +151,7 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
                 except json.JSONDecodeError:
                     pass
 
-    if current_text and not at_line_start:
+    if not at_line_start:
         print()
 
     if turn_usage:
