@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-CONFIRM_TOOLS = {"write_file", "edit_file", "delete_file", "fetch_webpage", "web_search", "run_bash", "change_directory"}
+CONFIRM_TOOLS = {"write_file", "edit_file", "delete_file", "fetch_webpage", "web_search", "run_bash"}
 
 
 def confirm_action(name: str, args: dict, session) -> bool:
@@ -224,17 +224,6 @@ def run_bash(command: str, session=None) -> str:
         return f"Error: {e}"
 
 
-def change_directory(path: str, session=None) -> str:
-    try:
-        new_path = os.path.expanduser("~") if not path else os.path.abspath(os.path.join(session.cwd, path))
-        if os.path.isdir(new_path):
-            session.cwd = new_path
-            return f"Changed to {session.cwd}"
-        return f"Error: Not a directory: {new_path}"
-    except Exception as e:
-        return f"Error: {e}"
-
-
 HANDLERS = {
     "read_file": read_file,
     "list_directory": list_directory,
@@ -245,28 +234,27 @@ HANDLERS = {
     "fetch_webpage": fetch_webpage,
     "web_search": web_search,
     "run_bash": run_bash,
-    "change_directory": change_directory,
 }
 
 SCHEMAS = [
     {"name": "read_file", "description": "Read a file's contents", "parameters": {
         "type": "object",
         "properties": {
-            "path": {"type": "string", "description": "File path"},
+            "path": {"type": "string", "description": "Absolute file path"},
             "offset": {"type": "integer", "description": "Starting line (1-indexed)"},
             "limit": {"type": "integer", "description": "Max lines to read"},
         },
         "required": ["path"]
     }},
-    {"name": "list_directory", "description": "List files in a directory", "parameters": {
+    {"name": "list_directory", "description": "List all files and directories in a directory", "parameters": {
         "type": "object",
-        "properties": {"path": {"type": "string", "description": "Directory path (default: .)"}},
-        "required": []
+        "properties": {"path": {"type": "string", "description": "Directory path to list contents of"}},
+        "required": ["path"]
     }},
     {"name": "write_file", "description": "Create or overwrite a file", "parameters": {
         "type": "object",
         "properties": {
-            "path": {"type": "string", "description": "File path"},
+            "path": {"type": "string", "description": "Absolute file path"},
             "content": {"type": "string", "description": "Content to write"},
         },
         "required": ["path", "content"]
@@ -274,7 +262,7 @@ SCHEMAS = [
     {"name": "edit_file", "description": "Replace a unique string in a file", "parameters": {
         "type": "object",
         "properties": {
-            "path": {"type": "string", "description": "File path"},
+            "path": {"type": "string", "description": "Absolute file path"},
             "old_string": {"type": "string", "description": "String to find (must be unique)"},
             "new_string": {"type": "string", "description": "Replacement string"},
         },
@@ -282,17 +270,17 @@ SCHEMAS = [
     }},
     {"name": "delete_file", "description": "Delete a file or empty directory", "parameters": {
         "type": "object",
-        "properties": {"path": {"type": "string", "description": "Path to delete"}},
+        "properties": {"path": {"type": "string", "description": "Absolute path to delete"}},
         "required": ["path"]
     }},
     {"name": "search", "description": "Search files with ripgrep", "parameters": {
         "type": "object",
         "properties": {
             "pattern": {"type": "string", "description": "Regex pattern"},
-            "path": {"type": "string", "description": "Directory to search (default: .)"},
+            "path": {"type": "string", "description": "Absolute directory path to search"},
             "file_pattern": {"type": "string", "description": "Glob filter (e.g. *.py)"},
         },
-        "required": ["pattern"]
+        "required": ["pattern", "path"]
     }},
     {"name": "fetch_webpage", "description": "Fetch webpage text content", "parameters": {
         "type": "object",
@@ -310,15 +298,10 @@ SCHEMAS = [
         },
         "required": ["query"]
     }},
-    {"name": "run_bash", "description": "Run a shell command", "parameters": {
+    {"name": "run_bash", "description": "Run a shell command in the working directory", "parameters": {
         "type": "object",
         "properties": {"command": {"type": "string", "description": "Command to run"}},
         "required": ["command"]
-    }},
-    {"name": "change_directory", "description": "Change working directory", "parameters": {
-        "type": "object",
-        "properties": {"path": {"type": "string", "description": "Directory path"}},
-        "required": ["path"]
     }},
 ]
 

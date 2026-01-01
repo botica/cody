@@ -6,7 +6,30 @@ import requests
 
 from tools import get_tools_schema
 
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+
+def _get_api_key():
+    """Get API key from environment or config file."""
+    # Check environment variable first
+    api_key = os.environ.get("OPENROUTER_API_KEY")
+    if api_key:
+        return api_key
+
+    # Check config file
+    config_path = os.path.expanduser("~/.cody/config.json")
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+                api_key = config.get("openrouter_api_key")
+                if api_key:
+                    return api_key
+        except (json.JSONDecodeError, IOError):
+            pass
+
+    return None
+
+
+OPENROUTER_API_KEY = _get_api_key()
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 #MODEL = "google/gemini-3-flash-preview"

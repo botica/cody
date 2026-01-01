@@ -1,5 +1,6 @@
 """Cody (from the movie) terminal agent with tool"""
 
+import argparse
 import json
 import os
 import sys
@@ -10,10 +11,16 @@ if sys.platform == 'win32':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
-SYSTEM_PROMPT = """
-You are an AI agent named Cody. You assist the user with general tasks, coding tasks, and have tools available for usage.
+
+def get_system_prompt(cwd: str) -> str:
+    return f"""You are an AI agent named Cody. You assist the user with general tasks, coding tasks, and have tools available for usage.
 Use your tools to complete the task. When searching the web, fetch at least one page for real content.
-""".strip()
+All file paths should be absolute paths. Use the working directory below as reference.
+
+Environment:
+- Working directory: {cwd}
+- Platform: {sys.platform}
+"""
 
 
 @dataclass
@@ -25,14 +32,10 @@ class Session:
 
     def __post_init__(self):
         if not self.conversation:
-            self.conversation = [{"role": "system", "content": SYSTEM_PROMPT}]
+            self.conversation = [{"role": "system", "content": get_system_prompt(self.cwd)}]
 
     def reset_turn(self):
         self.auto_confirm_turn = False
-
-
-from api import stream_completion, MODEL
-from tools import execute_tool
 
 
 def run(prompt: str, session: Session) -> None:
@@ -117,9 +120,48 @@ def get_input():
     return line
 
 
+def setup_config():
+    """Initialize config file if it doesn't exist."""
+    import api
+    config_path = os.path.expanduser("~/.cody/config.json")
+    config_dir = os.path.dirname(config_path)
+
+    if not api.OPENROUTER_API_KEY:
+        os.makedirs(config_dir, exist_ok=True)
+        if not os.path.exists(config_path):
+            api_key = input("No API key found. Enter your OpenRouter API key: ").strip()
+            if api_key:
+                config = {"openrouter_api_key": api_key}
+                with open(config_path, 'w') as f:
+                    json.dump(config, f, indent=2)
+                print(f"Config saved to {config_path}")
+                # Reload the API key from the newly created config
+                api.OPENROUTER_API_KEY = api._get_api_key()
+                return True
+    return api.OPENROUTER_API_KEY is not None
+
+
+from api import stream_completion, MODEL
+from tools import execute_tool
+
+
 def main():
-    session = Session()
+    parser = argparse.ArgumentParser(description="Cody terminal agent")
+    parser.add_argument('--cwd', '-C', default=os.getcwd(), help='Working directory')
+    args = parser.parse_args()
+
+    cwd = os.path.abspath(args.cwd)
+    if not os.path.isdir(cwd):
+        print(f"Error: {cwd} is not a directory")
+        sys.exit(1)
+
+    if not setup_config():
+        print("Error: No API key configured. Set OPENROUTER_API_KEY or create ~/.cody/config.json")
+        sys.exit(1)
+
+    session = Session(cwd=cwd)
     print(f"Cody [{MODEL}]")
+    print(f"cwd: {cwd}")
     print('Tip: Use """ or ``` for multi-line input')
 
     while True:
