@@ -8,36 +8,50 @@ import requests
 from tools import get_tools_schema
 
 
+def _load_env_file(path=".env"):
+    """Load .env file into os.environ."""
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                if '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ[key.strip()] = value.strip()
+    except IOError:
+        pass
+
+
 def _get_api_key():
-    """Get API key from environment or config file."""
-    # Check environment variable first
-    api_key = os.environ.get("OPENROUTER_API_KEY")
-    if api_key:
-        return api_key
+    """Get API key from environment variables or .env file."""
+    # Load .env file if it exists
+    _load_env_file()
 
-    # Check config file
-    config_path = os.path.expanduser("~/.cody/config.json")
-    if os.path.exists(config_path):
-        try:
-            with open(config_path, 'r') as f:
-                config = json.load(f)
-                api_key = config.get("openrouter_api_key")
-                if api_key:
-                    return api_key
-        except (json.JSONDecodeError, IOError):
-            pass
-
-    return None
+    # Check environment variable
+    return os.environ.get("OPENROUTER_API_KEY")
 
 
 OPENROUTER_API_KEY = _get_api_key()
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
+
+def check_config():
+    """Check if API key is configured."""
+    if not OPENROUTER_API_KEY:
+        print("Error: OPENROUTER_API_KEY not set")
+        print("Create a .env file with:")
+        print("  OPENROUTER_API_KEY=your_key_here")
+        return False
+    return True
+
 #MODEL = "google/gemini-3-flash-preview"
 #MODEL = "x-ai/grok-code-fast-1"
-MODEL = "minimax/minimax-m2.1"
+#MODEL = "minimax/minimax-m2.1"
 #MODEL = "deepseek/deepseek-r1"
-#MODEL = "openai/gpt-5.2"
+MODEL = "openai/gpt-5.2"
 #MODEL = "z-ai/glm-4.7"
 
 MODEL_PRICING = {  # per million tokens (input, output)

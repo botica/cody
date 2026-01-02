@@ -7,7 +7,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from api import stream_completion, MODEL
+from api import stream_completion, MODEL, check_config
 from tools import execute_tool
 
 if sys.platform == 'win32':
@@ -125,27 +125,6 @@ def get_input():
     return line
 
 
-def setup_config():
-    """Initialize config file if it doesn't exist."""
-    import api
-    config_path = os.path.expanduser("~/.cody/config.json")
-    config_dir = os.path.dirname(config_path)
-
-    if not api.OPENROUTER_API_KEY:
-        os.makedirs(config_dir, exist_ok=True)
-        if not os.path.exists(config_path):
-            api_key = input("No API key found. Enter your OpenRouter API key: ").strip()
-            if api_key:
-                config = {"openrouter_api_key": api_key}
-                with open(config_path, 'w') as f:
-                    json.dump(config, f, indent=2)
-                print(f"Config saved to {config_path}")
-                # Reload the API key from the newly created config
-                api.OPENROUTER_API_KEY = api._get_api_key()
-                return True
-    return api.OPENROUTER_API_KEY is not None
-
-
 def main():
     parser = argparse.ArgumentParser(description="Cody terminal agent")
     parser.add_argument('--cwd', '-C', default=os.getcwd(), help='Working directory')
@@ -156,8 +135,7 @@ def main():
         print(f"Error: {cwd} is not a directory")
         sys.exit(1)
 
-    if not setup_config():
-        print("Error: No API key configured. Set OPENROUTER_API_KEY or create ~/.cody/config.json")
+    if not check_config():
         sys.exit(1)
 
     session = Session(cwd=cwd)
