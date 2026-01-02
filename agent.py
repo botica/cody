@@ -32,6 +32,7 @@ Environment:
 class Session:
     cwd: str = field(default_factory=os.getcwd)
     token_usage: dict = field(default_factory=lambda: {"input": 0, "output": 0, "cost": 0.0})
+    request_cost: float = 0.0
     auto_confirm_turn: bool = False
     conversation: list = field(default_factory=list)
 
@@ -41,6 +42,7 @@ class Session:
 
     def reset_turn(self):
         self.auto_confirm_turn = False
+        self.request_cost = 0.0
 
 
 def run(prompt: str, session: Session) -> None:
