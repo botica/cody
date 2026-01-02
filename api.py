@@ -2,6 +2,7 @@
 
 import json
 import os
+import uuid
 import requests
 
 from tools import get_tools_schema
@@ -71,7 +72,13 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
     at_line_start = True
     had_reasoning = False
 
-    with requests.post(OPENROUTER_URL, headers=headers, json=payload, stream=True, timeout=60) as response:
+    try:
+        response = requests.post(OPENROUTER_URL, headers=headers, json=payload, stream=True, timeout=60)
+    except requests.exceptions.RequestException as e:
+        print(f"[error] Connection failed: {e}")
+        return "", [], None
+
+    with response:
         response.encoding = 'utf-8'  # Force UTF-8 (API returns UTF-8 but may not declare charset)
         if response.status_code != 200:
             error_msg = f"API Error {response.status_code}"
@@ -142,7 +149,7 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
                             idx = tc["index"]
                             if idx not in tool_calls_by_index:
                                 tool_calls_by_index[idx] = {
-                                    "id": tc.get("id", ""),
+                                    "id": tc.get("id") or f"call_{uuid.uuid4().hex[:8]}",
                                     "name": tc.get("function", {}).get("name", ""),
                                     "arguments": ""
                                 }
