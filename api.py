@@ -34,10 +34,10 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 #MODEL = "google/gemini-3-flash-preview"
 #MODEL = "x-ai/grok-code-fast-1"
-#MODEL = "minimax/minimax-m2.1"
+MODEL = "minimax/minimax-m2.1"
 #MODEL = "deepseek/deepseek-r1"
 #MODEL = "openai/gpt-5.2"
-MODEL = "z-ai/glm-4.7"
+#MODEL = "z-ai/glm-4.7"
 
 MODEL_PRICING = {  # per million tokens (input, output)
     "google/gemini-3-flash-preview": (0.50, 3.00),
@@ -71,7 +71,7 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
     at_line_start = True
     had_reasoning = False
 
-    with requests.post(OPENROUTER_URL, headers=headers, json=payload, stream=True) as response:
+    with requests.post(OPENROUTER_URL, headers=headers, json=payload, stream=True, timeout=60) as response:
         response.encoding = 'utf-8'  # Force UTF-8 (API returns UTF-8 but may not declare charset)
         if response.status_code != 200:
             error_msg = f"API Error {response.status_code}"
@@ -150,8 +150,8 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
                             if "function" in tc and "arguments" in tc["function"]:
                                 tool_calls_by_index[idx]["arguments"] += tc["function"]["arguments"]
 
-                except json.JSONDecodeError:
-                    pass
+                except json.JSONDecodeError as e:
+                    print(f"[debug] JSON decode error: {e} in: {data[:100]}")
 
     if not at_line_start:
         print()

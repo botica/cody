@@ -2,6 +2,7 @@
 
 import inspect
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -52,6 +53,8 @@ def execute_tool(name: str, args: dict, session) -> str:
 def read_file(path: str, offset=None, limit=None, session=None) -> str:
     try:
         full_path = os.path.abspath(os.path.join(session.cwd, path))
+        if os.path.getsize(full_path) > 10_000_000:  # 10MB limit
+            return f"Error: File too large (>10MB): {path}"
         with open(full_path, encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
 
@@ -115,14 +118,20 @@ def edit_file(path: str, old_string: str, new_string: str, session=None) -> str:
         return f"Error: {e}"
 
 
-def delete_file(path: str, session=None) -> str:
+def delete_file(path: str, recursive: bool = False, session=None) -> str:
     try:
         full_path = os.path.abspath(os.path.join(session.cwd, path))
         p = Path(full_path)
         if p.is_file():
             p.unlink()
         elif p.is_dir():
-            p.rmdir()
+            if recursive:
+                shutil.rmtree(full_path)
+            else:
+                try:
+                    p.rmdir()
+                except OSError:
+                    return f"Error: Directory not empty. Use recursive=true to delete: {path}"
         else:
             return f"Error: Not found: {path}"
         return f"Deleted {path}"
@@ -219,7 +228,12 @@ def run_bash(command: str, session=None) -> str:
         for line in proc.stdout:
             print(line, end="", flush=True)
             lines.append(line)
-        return "".join(lines) or f"Done (exit {proc.wait()})"
+        try:
+            exit_code = proc.wait(timeout=300)  # 5 min timeout
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            return "".join(lines) + "\n[Error: Command timed out after 5 minutes]"
+        return "".join(lines) or f"Done (exit {exit_code})"
     except Exception as e:
         return f"Error: {e}"
 
@@ -268,9 +282,12 @@ SCHEMAS = [
         },
         "required": ["path", "old_string", "new_string"]
     }},
-    {"name": "delete_file", "description": "Delete a file or empty directory", "parameters": {
+    {"name": "delete_file", "description": "Delete a file or directory", "parameters": {
         "type": "object",
-        "properties": {"path": {"type": "string", "description": "Absolute path to delete"}},
+        "properties": {
+            "path": {"type": "string", "description": "Absolute path to delete"},
+            "recursive": {"type": "boolean", "description": "Delete non-empty directories recursively (default: false)"},
+        },
         "required": ["path"]
     }},
     {"name": "search", "description": "Search files with ripgrep", "parameters": {

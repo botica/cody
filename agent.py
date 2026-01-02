@@ -5,6 +5,10 @@ import json
 import os
 import sys
 from dataclasses import dataclass, field
+from datetime import datetime
+
+from api import stream_completion, MODEL
+from tools import execute_tool
 
 if sys.platform == 'win32':
     import io
@@ -20,6 +24,7 @@ All file paths should be absolute paths. Use the working directory below as refe
 Environment:
 - Working directory: {cwd}
 - Platform: {sys.platform}
+- Date: {datetime.now().strftime('%Y-%m-%d')}
 """
 
 
@@ -139,10 +144,6 @@ def setup_config():
                 api.OPENROUTER_API_KEY = api._get_api_key()
                 return True
     return api.OPENROUTER_API_KEY is not None
-
-
-from api import stream_completion, MODEL
-from tools import execute_tool
 
 
 def main():
