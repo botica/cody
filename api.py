@@ -36,6 +36,7 @@ def _get_api_key():
 
 OPENROUTER_API_KEY = _get_api_key()
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+MAX_REQUEST_TOKENS = 40000  # input tokens allowed per request before cancelling
 
 
 def check_config():
@@ -49,9 +50,9 @@ def check_config():
 
 #MODEL = "google/gemini-3-flash-preview"
 #MODEL = "x-ai/grok-code-fast-1"
-MODEL = "minimax/minimax-m2.1"
+#MODEL = "minimax/minimax-m2.1"
 #MODEL = "deepseek/deepseek-r1"
-#MODEL = "openai/gpt-5.2"
+MODEL = "openai/gpt-5.2"
 #MODEL = "z-ai/glm-4.7"
 
 MODEL_PRICING = {  # per million tokens (input, output)
@@ -189,12 +190,13 @@ def _print_usage(turn_usage: dict, session):
     out = turn_usage.get("completion_tokens", 0)
     session.token_usage["input"] += inp
     session.token_usage["output"] += out
+    session.request_tokens += inp
 
     pricing = MODEL_PRICING.get(MODEL)
     if pricing:
         turn_cost = (inp * pricing[0] + out * pricing[1]) / 1_000_000
         session.token_usage["cost"] += turn_cost
         session.request_cost += turn_cost
-        print(f"[tokens] +{inp:,} in, +{out:,} out (${turn_cost:.4f}) | request: ${session.request_cost:.4f} | session: ${session.token_usage['cost']:.4f}")
+        print(f"[tokens] +{inp:,} in, +{out:,} out (${turn_cost:.4f}) | request: ${session.request_cost:.4f} ({session.request_tokens:,} in) | session: ${session.token_usage['cost']:.4f}")
     else:
-        print(f"[tokens] +{inp:,} in, +{out:,} out | session: {session.token_usage['input']:,} in, {session.token_usage['output']:,} out")
+        print(f"[tokens] +{inp:,} in, +{out:,} out | request: {session.request_tokens:,} in | session: {session.token_usage['input']:,} in, {session.token_usage['output']:,} out")

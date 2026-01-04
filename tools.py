@@ -7,6 +7,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+import requests
+from bs4 import BeautifulSoup
+import trafilatura
+from ddgs import DDGS
+from playwright.sync_api import sync_playwright
+
 CONFIRM_TOOLS = {"write_file", "edit_file", "delete_file", "fetch_webpage", "web_search", "run_bash"}
 
 
@@ -167,26 +173,37 @@ def fetch_webpage(url: str, use_browser: bool = False, session=None) -> str:
         print(f"{len(lines)} lines, {len(text)} chars")
         return "\n".join(lines)
 
-    def with_requests():
-        import requests
-        from bs4 import BeautifulSoup
-        resp = requests.get(url, timeout=15, headers=get_headers())
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "html.parser")
+    def extract(html: str) -> str:
+        """Extract main content using trafilatura"""
+        text = trafilatura.extract(html, include_tables=True)
+        if text:
+            return text
+        # Fallback to BeautifulSoup
+        soup = BeautifulSoup(html, "html.parser")
         for tag in soup(["script", "style", "nav", "footer", "header"]):
             tag.decompose()
         return soup.get_text(separator="\n", strip=True)
 
+    def with_requests():
+        resp = requests.get(url, timeout=15, headers=get_headers())
+        resp.raise_for_status()
+        raw_len = len(resp.text)
+        text = extract(resp.text)
+        print(f"[trafilatura] {raw_len:,} -> {len(text):,} chars ({100 - len(text)/raw_len*100:.0f}% reduction)")
+        return text
+
     def with_browser():
-        from playwright.sync_api import sync_playwright
         print("[browser] launching...", end="", flush=True)
         with sync_playwright() as p:
             browser = p.firefox.launch(headless=True)
             page = browser.new_page()
             page.goto(url, timeout=30000)
-            text = page.inner_text("body")
+            html = page.content()
             browser.close()
         print(" done")
+        raw_len = len(html)
+        text = extract(html)
+        print(f"[trafilatura] {raw_len:,} -> {len(text):,} chars ({100 - len(text)/raw_len*100:.0f}% reduction)")
         return text
 
     try:
@@ -203,7 +220,6 @@ def fetch_webpage(url: str, use_browser: bool = False, session=None) -> str:
 
 def web_search(query: str, backend: str = "auto", session=None) -> str:
     try:
-        from ddgs import DDGS
         print(f"[search:{backend}] '{query}'")
         results = []
         with DDGS() as ddgs:
