@@ -153,19 +153,18 @@ def main():
 
     session = Session(cwd=cwd)
     print(f"Cody [{MODEL}]")
-    print(f"cwd: {cwd}")
-    print("Tip: Use \"\"\" or ''' for multi-line input")
 
     while True:
         try:
             prompt = get_input()
+            if prompt.strip() == "/clear":
+                session.conversation = [{"role": "system", "content": get_system_prompt(session.cwd)}]
+                session.token_usage = {"input": 0, "output": 0, "cost": 0.0}
+                print("[cleared]")
+                continue
             if prompt.strip():
                 print()
-                try:
-                    run(prompt, session)
-                except KeyboardInterrupt:
-                    print("\n[interrupted]")
-                    continue
+                run(prompt, session)
         except (KeyboardInterrupt, EOFError):
             print()
             sys.exit(0)
