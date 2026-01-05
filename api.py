@@ -36,7 +36,7 @@ def _get_api_key():
 
 OPENROUTER_API_KEY = _get_api_key()
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MAX_REQUEST_TOKENS = 40000  # input tokens allowed per request before cancelling
+MAX_TURN_COST = 0.50  # max cost per turn in dollars
 
 
 def check_config():
@@ -60,8 +60,7 @@ MODEL_PRICING = {  # per million tokens (input, output)
     "minimax/minimax-m2.1": (0.30, 1.20),
     "x-ai/grok-code-fast-1": (0.20, 1.50),
     "z-ai/glm-4.7": (0.40, 1.50),
-
-    # OpenAI pricing (per 1M tokens): $1.75 input / $14.00 output
+    "deepseek/deepseek-r1": (0.70, 2.40),
     "openai/gpt-5.2": (1.75, 14.00),
 }
 
@@ -82,7 +81,7 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
 
     tool_calls_by_index = {}
     current_text = ""
-    turn_usage = None
+    call_usage = None
     reasoning_details = None
     at_line_start = True
     had_reasoning = False
@@ -130,7 +129,7 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
                     data_obj = json.loads(data)
 
                     if "usage" in data_obj:
-                        turn_usage = data_obj["usage"]
+                        call_usage = data_obj["usage"]
 
                     if not data_obj.get("choices"):
                         continue
@@ -178,25 +177,26 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
     if not at_line_start:
         print()
 
-    if turn_usage:
-        _print_usage(turn_usage, session)
+    if call_usage:
+        _print_usage(call_usage, session)
 
     tool_calls = list(tool_calls_by_index.values())
     return current_text, tool_calls, reasoning_details
 
 
-def _print_usage(turn_usage: dict, session):
-    inp = turn_usage.get("prompt_tokens", 0)
-    out = turn_usage.get("completion_tokens", 0)
+def _print_usage(call_usage: dict, session):
+    inp = call_usage.get("prompt_tokens", 0)
+    out = call_usage.get("completion_tokens", 0)
     session.token_usage["input"] += inp
     session.token_usage["output"] += out
-    session.request_tokens += inp
+    session.turn_tokens_in += inp
+    session.turn_tokens_out += out
 
     pricing = MODEL_PRICING.get(MODEL)
     if pricing:
-        turn_cost = (inp * pricing[0] + out * pricing[1]) / 1_000_000
-        session.token_usage["cost"] += turn_cost
-        session.request_cost += turn_cost
-        print(f"[tokens] +{inp:,} in, +{out:,} out (${turn_cost:.4f}) | request: ${session.request_cost:.4f} ({session.request_tokens:,} in) | session: ${session.token_usage['cost']:.4f}")
+        call_cost = (inp * pricing[0] + out * pricing[1]) / 1_000_000
+        session.token_usage["cost"] += call_cost
+        session.turn_cost += call_cost
+        print(f"[tokens] call: {inp:,} in, {out:,} out (${call_cost:.4f}) | turn: {session.turn_tokens_in:,} in, {session.turn_tokens_out:,} out (${session.turn_cost:.4f}) | session: {session.token_usage['input']:,} in, {session.token_usage['output']:,} out (${session.token_usage['cost']:.4f})")
     else:
-        print(f"[tokens] +{inp:,} in, +{out:,} out | request: {session.request_tokens:,} in | session: {session.token_usage['input']:,} in, {session.token_usage['output']:,} out")
+        print(f"[tokens] call: {inp:,} in, {out:,} out | turn: {session.turn_tokens_in:,} in, {session.turn_tokens_out:,} out | session: {session.token_usage['input']:,} in, {session.token_usage['output']:,} out")

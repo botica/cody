@@ -7,7 +7,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from api import stream_completion, MODEL, check_config, MAX_REQUEST_TOKENS
+from api import stream_completion, MODEL, check_config, MAX_TURN_COST
 from tools import execute_tool
 
 if sys.platform == 'win32':
@@ -32,8 +32,9 @@ Environment:
 class Session:
     cwd: str = field(default_factory=os.getcwd)
     token_usage: dict = field(default_factory=lambda: {"input": 0, "output": 0, "cost": 0.0})
-    request_cost: float = 0.0
-    request_tokens: int = 0
+    turn_cost: float = 0.0
+    turn_tokens_in: int = 0
+    turn_tokens_out: int = 0
     auto_confirm_turn: bool = False
     conversation: list = field(default_factory=list)
 
@@ -43,8 +44,9 @@ class Session:
 
     def reset_turn(self):
         self.auto_confirm_turn = False
-        self.request_cost = 0.0
-        self.request_tokens = 0
+        self.turn_cost = 0.0
+        self.turn_tokens_in = 0
+        self.turn_tokens_out = 0
 
 
 def run(prompt: str, session: Session) -> None:
@@ -55,9 +57,9 @@ def run(prompt: str, session: Session) -> None:
     while True:
         text, tool_calls, reasoning_details = stream_completion(session.conversation, session)
 
-        # Check token limit
-        if session.request_tokens > MAX_REQUEST_TOKENS:
-            print(f"\n[limit] Request exceeded {MAX_REQUEST_TOKENS:,} tokens, cancelling")
+        # Check cost limit
+        if session.turn_cost > MAX_TURN_COST:
+            print(f"\n[limit] Turn exceeded ${MAX_TURN_COST:.2f}, cancelling")
             session.conversation = session.conversation[:conversation_start]
             break
 
