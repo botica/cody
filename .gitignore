@@ -1,19 +1,19 @@
-# Config with sensitive data
-~/.cody/config.json
-
-~/openrouter-key
-~/nul
-~/.claude/
+# Local config / secrets (do not commit)
+openrouter-key
+nul
+.claude/
+.cody/
+.env
 
 # Python
 __pycache__/
 *.py[cod]
 *.egg-info/
-.env
 
 # IDE
 .vscode/
 .idea/
 
-# Scripts
+# Scripts / local helpers
 run-cody.ps1
+tests.py 
