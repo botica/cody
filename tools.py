@@ -56,9 +56,34 @@ def execute_tool(name: str, args: dict, session) -> str:
     return handler(session=session, **filtered)
 
 
+def _resolve_in_workspace(session, user_path: str) -> str:
+    """Resolve a user-supplied path and ensure it stays within session.cwd.
+
+    Accepts either a relative path (to session.cwd) or an absolute path that is
+    still inside session.cwd.
+    """
+    if session is None or not getattr(session, "cwd", None):
+        raise ValueError("session.cwd is required")
+
+    workspace = Path(session.cwd).resolve()
+    p = Path(user_path)
+    if not p.is_absolute():
+        p = workspace / p
+
+    # resolve() (strict=False) prevents '..' traversal and follows symlinks.
+    resolved = p.resolve(strict=False)
+
+    try:
+        resolved.relative_to(workspace)
+    except Exception:
+        raise PermissionError(f"Path escapes workspace: {user_path}")
+
+    return str(resolved)
+
+
 def read_file(path: str, offset=None, limit=None, session=None) -> str:
     try:
-        full_path = os.path.abspath(os.path.join(session.cwd, path))
+        full_path = _resolve_in_workspace(session, path)
         if os.path.getsize(full_path) > 10_000_000:  # 10MB limit
             return f"Error: File too large (>10MB): {path}"
         with open(full_path, encoding="utf-8", errors="replace") as f:
@@ -77,6 +102,8 @@ def read_file(path: str, offset=None, limit=None, session=None) -> str:
         if offset or limit:
             header += f" [showing lines {start + 1}-{start + len(lines)}]"
         return header + "\n" + "\n".join(result)
+    except PermissionError as e:
+        return f"Error: {e}"
     except FileNotFoundError:
         return f"Error: File not found: {path}"
     except Exception as e:
@@ -85,28 +112,32 @@ def read_file(path: str, offset=None, limit=None, session=None) -> str:
 
 def list_directory(path: str = ".", session=None) -> str:
     try:
-        full_path = os.path.abspath(os.path.join(session.cwd, path))
+        full_path = _resolve_in_workspace(session, path)
         result = "\n".join(os.listdir(full_path))
         print(result)
         return result
+    except PermissionError as e:
+        return f"Error: {e}"
     except Exception as e:
         return f"Error: {e}"
 
 
 def write_file(path: str, content: str, session=None) -> str:
     try:
-        full_path = os.path.abspath(os.path.join(session.cwd, path))
+        full_path = _resolve_in_workspace(session, path)
         Path(full_path).parent.mkdir(parents=True, exist_ok=True)
         with open(full_path, "w", encoding="utf-8") as f:
             f.write(content)
         return f"Wrote {len(content)} bytes to {path}"
+    except PermissionError as e:
+        return f"Error: {e}"
     except Exception as e:
         return f"Error: {e}"
 
 
 def edit_file(path: str, old_string: str, new_string: str, session=None) -> str:
     try:
-        full_path = os.path.abspath(os.path.join(session.cwd, path))
+        full_path = _resolve_in_workspace(session, path)
         with open(full_path, "r", encoding="utf-8") as f:
             content = f.read()
 
@@ -118,6 +149,8 @@ def edit_file(path: str, old_string: str, new_string: str, session=None) -> str:
         with open(full_path, "w", encoding="utf-8") as f:
             f.write(content.replace(old_string, new_string, 1))
         return f"Edited {path}"
+    except PermissionError as e:
+        return f"Error: {e}"
     except FileNotFoundError:
         return f"Error: File not found: {path}"
     except Exception as e:
@@ -126,7 +159,7 @@ def edit_file(path: str, old_string: str, new_string: str, session=None) -> str:
 
 def delete_file(path: str, recursive: bool = False, session=None) -> str:
     try:
-        full_path = os.path.abspath(os.path.join(session.cwd, path))
+        full_path = _resolve_in_workspace(session, path)
         p = Path(full_path)
         if p.is_file():
             p.unlink()
@@ -141,13 +174,15 @@ def delete_file(path: str, recursive: bool = False, session=None) -> str:
         else:
             return f"Error: Not found: {path}"
         return f"Deleted {path}"
+    except PermissionError as e:
+        return f"Error: {e}"
     except Exception as e:
         return f"Error: {e}"
 
 
 def search(pattern: str, path: str = ".", file_pattern: str = None, session=None) -> str:
     try:
-        full_path = os.path.abspath(os.path.join(session.cwd, path))
+        full_path = _resolve_in_workspace(session, path)
         cmd = ["rg", pattern, full_path, "--color=never", "--max-count=50"]
         if file_pattern:
             cmd.extend(["-g", file_pattern])
@@ -158,6 +193,8 @@ def search(pattern: str, path: str = ".", file_pattern: str = None, session=None
         elif result.returncode == 1:
             return "No matches found"
         return f"Error: {result.stderr}"
+    except PermissionError as e:
+        return f"Error: {e}"
     except FileNotFoundError:
         return "Error: ripgrep (rg) not installed"
     except Exception as e:
@@ -270,7 +307,7 @@ SCHEMAS = [
     {"name": "read_file", "description": "Read a file's contents", "parameters": {
         "type": "object",
         "properties": {
-            "path": {"type": "string", "description": "Absolute file path"},
+            "path": {"type": "string", "description": "Path relative to workspace (session.cwd) or absolute path within workspace"},
             "offset": {"type": "integer", "description": "Starting line (1-indexed)"},
             "limit": {"type": "integer", "description": "Max lines to read"},
         },
@@ -278,13 +315,13 @@ SCHEMAS = [
     }},
     {"name": "list_directory", "description": "List all files and directories in a directory", "parameters": {
         "type": "object",
-        "properties": {"path": {"type": "string", "description": "Directory path to list contents of"}},
+        "properties": {"path": {"type": "string", "description": "Directory path relative to workspace (session.cwd) or absolute path within workspace"}},
         "required": ["path"]
     }},
     {"name": "write_file", "description": "Create or overwrite a file", "parameters": {
         "type": "object",
         "properties": {
-            "path": {"type": "string", "description": "Absolute file path"},
+            "path": {"type": "string", "description": "Path relative to workspace (session.cwd) or absolute path within workspace"},
             "content": {"type": "string", "description": "Content to write"},
         },
         "required": ["path", "content"]
@@ -292,7 +329,7 @@ SCHEMAS = [
     {"name": "edit_file", "description": "Replace a unique string in a file", "parameters": {
         "type": "object",
         "properties": {
-            "path": {"type": "string", "description": "Absolute file path"},
+            "path": {"type": "string", "description": "Path relative to workspace (session.cwd) or absolute path within workspace"},
             "old_string": {"type": "string", "description": "String to find (must be unique)"},
             "new_string": {"type": "string", "description": "Replacement string"},
         },
@@ -301,7 +338,7 @@ SCHEMAS = [
     {"name": "delete_file", "description": "Delete a file or directory", "parameters": {
         "type": "object",
         "properties": {
-            "path": {"type": "string", "description": "Absolute path to delete"},
+            "path": {"type": "string", "description": "Path relative to workspace (session.cwd) or absolute path within workspace"},
             "recursive": {"type": "boolean", "description": "Delete non-empty directories recursively (default: false)"},
         },
         "required": ["path"]
@@ -310,7 +347,7 @@ SCHEMAS = [
         "type": "object",
         "properties": {
             "pattern": {"type": "string", "description": "Regex pattern"},
-            "path": {"type": "string", "description": "Absolute directory path to search"},
+            "path": {"type": "string", "description": "Directory path relative to workspace (session.cwd) or absolute path within workspace"},
             "file_pattern": {"type": "string", "description": "Glob filter (e.g. *.py)"},
         },
         "required": ["pattern", "path"]
