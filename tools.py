@@ -9,6 +9,7 @@ from pathlib import Path
 
 import requests
 from bs4 import BeautifulSoup
+from urllib.parse import urlparse
 import trafilatura
 from ddgs import DDGS
 from playwright.sync_api import sync_playwright
@@ -202,6 +203,23 @@ def search(pattern: str, path: str = ".", file_pattern: str = None, session=None
 
 
 def fetch_webpage(url: str, use_browser: bool = False, session=None) -> str:
+
+    def validate_url(u: str):
+        """Validate and normalize a URL for fetching.
+        """
+        if not isinstance(u, str) or not u.strip():
+            return None, "Error: url must be a non-empty string"
+
+        u = u.strip()
+        parsed = urlparse(u)
+
+        if parsed.scheme not in ("http", "https"):
+            return None, f"Error: Only http(s) URLs are allowed (got scheme={parsed.scheme!r})"
+        if not parsed.netloc or parsed.hostname is None:
+            return None, "Error: URL must include a valid host"
+
+        return u, None
+
     def get_headers():
         return {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0"}
 
@@ -243,6 +261,9 @@ def fetch_webpage(url: str, use_browser: bool = False, session=None) -> str:
         print(f"[trafilatura] {raw_len:,} -> {len(text):,} chars ({100 - len(text)/raw_len*100:.0f}% reduction)")
         return text
 
+    url, err = validate_url(url)
+    if err:
+        return err
     try:
         if use_browser:
             return process(with_browser())
