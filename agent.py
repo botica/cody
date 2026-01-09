@@ -9,6 +9,7 @@ from datetime import datetime
 
 from api import stream_completion, MODEL, check_config, MAX_TURN_COST
 from tools import execute_tool
+import printer
 
 if sys.platform == 'win32':
     import io
@@ -59,7 +60,7 @@ def run(prompt: str, session: Session) -> None:
 
         # Check cost limit
         if session.turn_cost > MAX_TURN_COST:
-            print(f"\n[limit] Turn exceeded ${MAX_TURN_COST:.2f}, cancelling")
+            printer.limit_warning(MAX_TURN_COST)
             session.conversation = session.conversation[:conversation_start]
             break
 
@@ -82,7 +83,7 @@ def run(prompt: str, session: Session) -> None:
         if text:
             assistant_msg["content"] = text
         if reasoning_details:
-            print(f"\033[38;5;210m[reasoning] captured {len(reasoning_details)} blocks\033[0m")
+            printer.reasoning(len(reasoning_details))
             assistant_msg["reasoning_details"] = reasoning_details
         session.conversation.append(assistant_msg)
 
@@ -99,34 +100,20 @@ def run(prompt: str, session: Session) -> None:
 
             if args:
                 if tc['name'] == 'write_file' and 'content' in args:
-                    path = args.get('path', '')
-                    content = args['content']
-                    all_lines = content.splitlines()
-                    lines = all_lines[:10]  # show first 10 lines
-                    preview = '\n'.join(f"  \033[38;5;220m{line[:100]}\033[0m" for line in lines)
-                    if len(all_lines) > 10:
-                        preview += f"\n  \033[38;5;240m... ({len(all_lines)} lines total)\033[0m"
-                    print(f"\033[38;5;75m[{tc['name']}]\033[0m \033[38;5;220m{path}\033[0m\n{preview}")
+                    printer.write_preview(args.get('path', ''), args['content'])
                 elif tc['name'] == 'edit_file':
-                    path = args.get('path', '')
-                    old = args.get('old_string', '')
-                    new = args.get('new_string', '')
-                    # Show old (red) and new (green) on separate lines
-                    def format_preview(s, max_lines=5):
-                        lines = s.splitlines()[:max_lines]
-                        result = '\n'.join(f"    {line[:80]}" for line in lines)
-                        if len(s.splitlines()) > max_lines:
-                            result += f"\n    ... ({len(s.splitlines())} lines)"
-                        return result
-                    print(f"\033[38;5;75m[{tc['name']}]\033[0m \033[38;5;220m{path}\033[0m")
-                    if old:
-                        print(f"  \033[38;5;203m- {old.splitlines()[0][:80]}\033[0m" + (f" \033[38;5;240m({len(old.splitlines())} lines)\033[0m" if len(old.splitlines()) > 1 else ""))
-                    print(f"  \033[38;5;114m+ {new.splitlines()[0][:80]}\033[0m" + (f" \033[38;5;240m({len(new.splitlines())} lines)\033[0m" if len(new.splitlines()) > 1 else ""))
+                    printer.edit_diff(
+                        args.get('path', ''),
+                        args.get('old_string', ''),
+                        args.get('new_string', ''),
+                        insert_before=args.get('insert_before', False),
+                        insert_after=args.get('insert_after', False)
+                    )
                 else:
-                    args_str = " ".join(f"{k}={repr(v)[:60]}" for k, v in args.items())
-                    print(f"\033[38;5;75m[{tc['name']}]\033[0m \033[38;5;220m{args_str}\033[0m")
+                    args_str = " ".join(f"{k}={str(v)[:60]}" for k, v in args.items())
+                    printer.tool_call(tc['name'], args_str)
             else:
-                print(f"\033[38;5;75m[{tc['name']}]\033[0m")
+                printer.tool_call(tc['name'])
 
             result = execute_tool(tc["name"], args, session)
             session.conversation.append({
@@ -177,7 +164,7 @@ def main():
         sys.exit(1)
 
     session = Session(cwd=cwd)
-    print(f"Cody [{MODEL}]")
+    printer.banner("Cody", MODEL)
 
     while True:
         try:

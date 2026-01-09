@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 import trafilatura
 from ddgs import DDGS
 from playwright.sync_api import sync_playwright
+import printer
 
 CONFIRM_TOOLS = {"write_file", "edit_file", "delete_file", "fetch_webpage", "web_search", "run_bash"}
 
@@ -30,7 +31,7 @@ def confirm_action(name: str, args: dict, session) -> bool:
     else:
         detail = f"'{args.get('path', '')}'"
 
-    print(f"\nConfirm {name} {detail}? [y/n/!] ", end="", flush=True)
+    printer.confirm(name, detail)
     try:
         response = input().strip().lower()
         if response == "!":
@@ -116,7 +117,7 @@ def list_directory(path: str = ".", session=None) -> str:
         full_path = _resolve_in_workspace(session, path)
         items = os.listdir(full_path)
         for item in items:
-            print(f"\033[38;5;220m  {item}\033[0m")
+            printer.item(item)
         return "\n".join(items)
     except PermissionError as e:
         return f"Error: {e}"
@@ -279,21 +280,21 @@ def fetch_webpage(url: str, use_browser: bool = False, session=None) -> str:
         resp.raise_for_status()
         raw_len = len(resp.text)
         text = extract(resp.text)
-        print(f"\033[38;5;75m[trafilatura]\033[0m \033[38;5;220m{raw_len:,} -> {len(text):,} chars ({100 - len(text)/raw_len*100:.0f}% reduction)\033[0m")
+        printer.fetch_stats("trafilatura", raw_len, len(text))
         return text
 
     def with_browser():
-        print("\033[38;5;75m[browser]\033[0m \033[38;5;220mlaunching...", end="", flush=True)
+        printer.fetch_browser_start()
         with sync_playwright() as p:
             browser = p.firefox.launch(headless=True)
             page = browser.new_page()
             page.goto(url, timeout=30000)
             html = page.content()
             browser.close()
-        print(" done\033[0m")
+        printer.fetch_browser_done()
         raw_len = len(html)
         text = extract(html)
-        print(f"\033[38;5;75m[trafilatura]\033[0m \033[38;5;220m{raw_len:,} -> {len(text):,} chars ({100 - len(text)/raw_len*100:.0f}% reduction)\033[0m")
+        printer.fetch_stats("trafilatura", raw_len, len(text))
         return text
 
     url, err = validate_url(url)
@@ -313,12 +314,12 @@ def fetch_webpage(url: str, use_browser: bool = False, session=None) -> str:
 
 def web_search(query: str, backend: str = "auto", session=None) -> str:
     try:
-        print(f"\033[38;5;75m[search:{backend}]\033[0m \033[38;5;220m'{query}'\033[0m")
+        printer.search_query(backend, query)
         results = []
         with DDGS() as ddgs:
             for r in ddgs.text(query, backend=backend, max_results=5):
                 title = r.get('title', '')
-                print(f"\033[38;5;220m  - {title}\033[0m")
+                printer.search_result(title)
                 results.append(f"- {title}\n  {r.get('href', '')}\n  {r.get('body', '')}")
         return "\n\n".join(results) if results else "No results found"
     except Exception as e:

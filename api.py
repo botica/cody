@@ -6,6 +6,7 @@ import uuid
 import requests
 
 from tools import get_tools_schema
+import printer
 
 
 def _load_env_file(path=".env"):
@@ -42,9 +43,7 @@ MAX_TURN_COST = 0.50  # max cost per turn in dollars
 def check_config():
     """Check if API key is configured."""
     if not OPENROUTER_API_KEY:
-        print("Error: OPENROUTER_API_KEY not set")
-        print("Create a .env file with:")
-        print("  OPENROUTER_API_KEY=your_key_here")
+        printer.config_error()
         return False
     return True
 
@@ -91,7 +90,7 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
     try:
         response = requests.post(OPENROUTER_URL, headers=headers, json=payload, stream=True, timeout=60)
     except requests.exceptions.RequestException as e:
-        print(f"[error] Connection failed: {e}")
+        printer.error(f"Connection failed: {e}")
         return "", [], None
 
     with response:
@@ -105,7 +104,7 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
             except Exception:
                 error_msg += f": {response.text[:200]}"
 
-            print(f"[error] {error_msg}")
+            printer.error(error_msg)
             return "", [], None
 
         buffer = ""
@@ -145,7 +144,7 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
 
                     reasoning = delta.get("reasoning") or delta.get("reasoning_content")
                     if reasoning:
-                        print(f"\033[38;5;210m{reasoning}\033[0m", end="", flush=True)
+                        printer.stream_reasoning(reasoning)
                         at_line_start = reasoning.endswith('\n')
                         had_reasoning = True
 
@@ -153,10 +152,10 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
                     if content:
                         if had_reasoning:
                             if not at_line_start:
-                                print()
-                            print()
+                                printer.newline()
+                            printer.newline()
                             had_reasoning = False
-                        print(content, end="", flush=True)
+                        printer.stream_content(content)
                         current_text += content
                         at_line_start = content.endswith('\n')
 
@@ -174,10 +173,10 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
                                 tool_calls_by_index[idx]["arguments"] += tc["function"]["arguments"]
 
                 except json.JSONDecodeError as e:
-                    print(f"[debug] JSON decode error: {e} in: {data[:100]}")
+                    printer.debug(f"JSON decode error: {e} in: {data[:100]}")
 
     if not at_line_start:
-        print()
+        printer.newline()
 
     if call_usage:
         _print_usage(call_usage, session)
@@ -199,6 +198,10 @@ def _print_usage(call_usage: dict, session):
         call_cost = (inp * pricing[0] + out * pricing[1]) / 1_000_000
         session.token_usage["cost"] += call_cost
         session.turn_cost += call_cost
-        print(f"\033[38;5;114m[tok] call:{inp:,}i/{out:,}o ${call_cost:.4f}|turn:{session.turn_tokens_in:,}i/{session.turn_tokens_out:,}o ${session.turn_cost:.4f}|session:{session.token_usage['input']:,}i/{session.token_usage['output']:,}o ${session.token_usage['cost']:.4f}\033[0m")
+        printer.usage(inp, out, call_cost,
+                      session.turn_tokens_in, session.turn_tokens_out, session.turn_cost,
+                      session.token_usage['input'], session.token_usage['output'], session.token_usage['cost'])
     else:
-        print(f"\033[38;5;114m[tok] call:{inp:,}i/{out:,}o|turn:{session.turn_tokens_in:,}i/{session.turn_tokens_out:,}o|session:{session.token_usage['input']:,}i/{session.token_usage['output']:,}o\033[0m")
+        printer.usage(inp, out, None,
+                      session.turn_tokens_in, session.turn_tokens_out, None,
+                      session.token_usage['input'], session.token_usage['output'], None)
