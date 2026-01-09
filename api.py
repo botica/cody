@@ -52,8 +52,9 @@ def check_config():
 #MODEL = "x-ai/grok-code-fast-1"
 #MODEL = "minimax/minimax-m2.1"
 #MODEL = "deepseek/deepseek-r1"
-MODEL = "openai/gpt-5.2"
+#MODEL = "openai/gpt-5.2"
 #MODEL = "z-ai/glm-4.7"
+MODEL = "google/gemini-3-pro-preview"
 
 MODEL_PRICING = {  # per million tokens (input, output)
     "google/gemini-3-flash-preview": (0.50, 3.00),
@@ -62,6 +63,7 @@ MODEL_PRICING = {  # per million tokens (input, output)
     "z-ai/glm-4.7": (0.40, 1.50),
     "deepseek/deepseek-r1": (0.70, 2.40),
     "openai/gpt-5.2": (1.75, 14.00),
+    "google/gemini-3-pro-preview": (2.00, 12.00),
 }
 
 

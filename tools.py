@@ -114,9 +114,10 @@ def read_file(path: str, offset=None, limit=None, session=None) -> str:
 def list_directory(path: str = ".", session=None) -> str:
     try:
         full_path = _resolve_in_workspace(session, path)
-        result = "\n".join(os.listdir(full_path))
-        print(result)
-        return result
+        items = os.listdir(full_path)
+        for item in items:
+            print(f"\033[38;5;220m  {item}\033[0m")
+        return "\n".join(items)
     except PermissionError as e:
         return f"Error: {e}"
     except Exception as e:
@@ -136,20 +137,54 @@ def write_file(path: str, content: str, session=None) -> str:
         return f"Error: {e}"
 
 
-def edit_file(path: str, old_string: str, new_string: str, session=None) -> str:
+def edit_file(path: str, new_string: str, old_string: str = "", replace_all: bool = False,
+               insert_before: bool = False, insert_after: bool = False, session=None) -> str:
     try:
         full_path = _resolve_in_workspace(session, path)
         with open(full_path, "r", encoding="utf-8") as f:
             content = f.read()
 
+        # If no old_string, append to end of file
+        if not old_string:
+            with open(full_path, "w", encoding="utf-8") as f:
+                f.write(content + new_string)
+            return f"Appended to {path}"
+
         if old_string not in content:
-            return f"Error: old_string not found in {path}"
-        if content.count(old_string) > 1:
-            return f"Error: old_string appears multiple times in {path}"
+            # Find similar lines to help model recover
+            lines = content.splitlines()
+            old_start = old_string.split('\n')[0][:40]  # first line of old_string
+            similar = [l.strip()[:60] for l in lines if old_start[:20].lower() in l.lower()][:3]
+            hint = f" Similar lines: {similar}" if similar else f" File has {len(lines)} lines."
+            return f"Error: old_string not found in {path}.{hint}"
+
+        count = content.count(old_string)
+        if count > 1 and not replace_all:
+            return f"Error: old_string appears {count} times in {path}. Use replace_all=true to replace all."
+
+        # Determine replacement based on mode
+        if insert_before:
+            replacement = new_string + old_string
+        elif insert_after:
+            replacement = old_string + new_string
+        else:
+            replacement = new_string
 
         with open(full_path, "w", encoding="utf-8") as f:
-            f.write(content.replace(old_string, new_string, 1))
-        return f"Edited {path}"
+            if replace_all:
+                f.write(content.replace(old_string, replacement))
+            else:
+                f.write(content.replace(old_string, replacement, 1))
+
+        # Build result message
+        if insert_before:
+            action = f"Inserted before"
+        elif insert_after:
+            action = f"Inserted after"
+        else:
+            action = "Edited"
+        suffix = f" ({count} locations)" if replace_all and count > 1 else ""
+        return f"{action} {path}{suffix}"
     except PermissionError as e:
         return f"Error: {e}"
     except FileNotFoundError:
@@ -244,11 +279,11 @@ def fetch_webpage(url: str, use_browser: bool = False, session=None) -> str:
         resp.raise_for_status()
         raw_len = len(resp.text)
         text = extract(resp.text)
-        print(f"\033[38;5;220m[trafilatura] {raw_len:,} -> {len(text):,} chars ({100 - len(text)/raw_len*100:.0f}% reduction)\033[0m")
+        print(f"\033[38;5;75m[trafilatura]\033[0m \033[38;5;220m{raw_len:,} -> {len(text):,} chars ({100 - len(text)/raw_len*100:.0f}% reduction)\033[0m")
         return text
 
     def with_browser():
-        print("\033[38;5;220m[browser] launching...", end="", flush=True)
+        print("\033[38;5;75m[browser]\033[0m \033[38;5;220mlaunching...", end="", flush=True)
         with sync_playwright() as p:
             browser = p.firefox.launch(headless=True)
             page = browser.new_page()
@@ -258,7 +293,7 @@ def fetch_webpage(url: str, use_browser: bool = False, session=None) -> str:
         print(" done\033[0m")
         raw_len = len(html)
         text = extract(html)
-        print(f"\033[38;5;220m[trafilatura] {raw_len:,} -> {len(text):,} chars ({100 - len(text)/raw_len*100:.0f}% reduction)\033[0m")
+        print(f"\033[38;5;75m[trafilatura]\033[0m \033[38;5;220m{raw_len:,} -> {len(text):,} chars ({100 - len(text)/raw_len*100:.0f}% reduction)\033[0m")
         return text
 
     url, err = validate_url(url)
@@ -278,7 +313,7 @@ def fetch_webpage(url: str, use_browser: bool = False, session=None) -> str:
 
 def web_search(query: str, backend: str = "auto", session=None) -> str:
     try:
-        print(f"\033[38;5;220m[search:{backend}] '{query}'\033[0m")
+        print(f"\033[38;5;75m[search:{backend}]\033[0m \033[38;5;220m'{query}'\033[0m")
         results = []
         with DDGS() as ddgs:
             for r in ddgs.text(query, backend=backend, max_results=5):
@@ -339,7 +374,7 @@ SCHEMAS = [
         "properties": {"path": {"type": "string", "description": "Directory path relative to workspace (session.cwd) or absolute path within workspace"}},
         "required": ["path"]
     }},
-    {"name": "write_file", "description": "Create or overwrite a file", "parameters": {
+    {"name": "write_file", "description": "Create a new file. Use edit_file to modify existing files.", "parameters": {
         "type": "object",
         "properties": {
             "path": {"type": "string", "description": "Path relative to workspace (session.cwd) or absolute path within workspace"},
@@ -347,14 +382,17 @@ SCHEMAS = [
         },
         "required": ["path", "content"]
     }},
-    {"name": "edit_file", "description": "Replace a unique string in a file", "parameters": {
+    {"name": "edit_file", "description": "Modify existing files. If old_string is omitted, appends to end of file. Otherwise finds old_string and replaces/inserts.", "parameters": {
         "type": "object",
         "properties": {
             "path": {"type": "string", "description": "Path relative to workspace (session.cwd) or absolute path within workspace"},
-            "old_string": {"type": "string", "description": "String to find (must be unique)"},
-            "new_string": {"type": "string", "description": "Replacement string"},
+            "new_string": {"type": "string", "description": "Content to insert or replacement text"},
+            "old_string": {"type": "string", "description": "String to find (omit to append to end of file)"},
+            "replace_all": {"type": "boolean", "description": "Apply to all occurrences (default: false, requires unique match)"},
+            "insert_before": {"type": "boolean", "description": "Insert new_string before old_string instead of replacing"},
+            "insert_after": {"type": "boolean", "description": "Insert new_string after old_string instead of replacing"},
         },
-        "required": ["path", "old_string", "new_string"]
+        "required": ["path", "new_string"]
     }},
     {"name": "delete_file", "description": "Delete a file or directory", "parameters": {
         "type": "object",
