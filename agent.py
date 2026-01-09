@@ -82,7 +82,7 @@ def run(prompt: str, session: Session) -> None:
         if text:
             assistant_msg["content"] = text
         if reasoning_details:
-            print(f"[reasoning] captured {len(reasoning_details)} blocks")
+            print(f"\033[38;5;210m[reasoning] captured {len(reasoning_details)} blocks\033[0m")
             assistant_msg["reasoning_details"] = reasoning_details
         session.conversation.append(assistant_msg)
 
@@ -99,9 +99,9 @@ def run(prompt: str, session: Session) -> None:
 
             if args:
                 args_str = " ".join(f"{k}={repr(v)[:60]}" for k, v in args.items())
-                print(f"[{tc['name']}] {args_str}")
+                print(f"\033[38;5;75m[{tc['name']}] {args_str}\033[0m")
             else:
-                print(f"[{tc['name']}]")
+                print(f"\033[38;5;75m[{tc['name']}]\033[0m")
 
             result = execute_tool(tc["name"], args, session)
             session.conversation.append({

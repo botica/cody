@@ -244,21 +244,21 @@ def fetch_webpage(url: str, use_browser: bool = False, session=None) -> str:
         resp.raise_for_status()
         raw_len = len(resp.text)
         text = extract(resp.text)
-        print(f"[trafilatura] {raw_len:,} -> {len(text):,} chars ({100 - len(text)/raw_len*100:.0f}% reduction)")
+        print(f"\033[38;5;220m[trafilatura] {raw_len:,} -> {len(text):,} chars ({100 - len(text)/raw_len*100:.0f}% reduction)\033[0m")
         return text
 
     def with_browser():
-        print("[browser] launching...", end="", flush=True)
+        print("\033[38;5;220m[browser] launching...", end="", flush=True)
         with sync_playwright() as p:
             browser = p.firefox.launch(headless=True)
             page = browser.new_page()
             page.goto(url, timeout=30000)
             html = page.content()
             browser.close()
-        print(" done")
+        print(" done\033[0m")
         raw_len = len(html)
         text = extract(html)
-        print(f"[trafilatura] {raw_len:,} -> {len(text):,} chars ({100 - len(text)/raw_len*100:.0f}% reduction)")
+        print(f"\033[38;5;220m[trafilatura] {raw_len:,} -> {len(text):,} chars ({100 - len(text)/raw_len*100:.0f}% reduction)\033[0m")
         return text
 
     url, err = validate_url(url)
@@ -278,12 +278,12 @@ def fetch_webpage(url: str, use_browser: bool = False, session=None) -> str:
 
 def web_search(query: str, backend: str = "auto", session=None) -> str:
     try:
-        print(f"[search:{backend}] '{query}'")
+        print(f"\033[38;5;220m[search:{backend}] '{query}'\033[0m")
         results = []
         with DDGS() as ddgs:
             for r in ddgs.text(query, backend=backend, max_results=5):
                 title = r.get('title', '')
-                print(f"  - {title}")
+                print(f"\033[38;5;220m  - {title}\033[0m")
                 results.append(f"- {title}\n  {r.get('href', '')}\n  {r.get('body', '')}")
         return "\n\n".join(results) if results else "No results found"
     except Exception as e:

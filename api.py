@@ -197,6 +197,6 @@ def _print_usage(call_usage: dict, session):
         call_cost = (inp * pricing[0] + out * pricing[1]) / 1_000_000
         session.token_usage["cost"] += call_cost
         session.turn_cost += call_cost
-        print(f"[tokens] call: {inp:,} in, {out:,} out (${call_cost:.4f}) | turn: {session.turn_tokens_in:,} in, {session.turn_tokens_out:,} out (${session.turn_cost:.4f}) | session: {session.token_usage['input']:,} in, {session.token_usage['output']:,} out (${session.token_usage['cost']:.4f})")
+        print(f"\033[38;5;114m[tok] call:{inp:,}i/{out:,}o ${call_cost:.4f}|turn:{session.turn_tokens_in:,}i/{session.turn_tokens_out:,}o ${session.turn_cost:.4f}|session:{session.token_usage['input']:,}i/{session.token_usage['output']:,}o ${session.token_usage['cost']:.4f}\033[0m")
     else:
-        print(f"[tokens] call: {inp:,} in, {out:,} out | turn: {session.turn_tokens_in:,} in, {session.turn_tokens_out:,} out | session: {session.token_usage['input']:,} in, {session.token_usage['output']:,} out")
+        print(f"\033[38;5;114m[tok] call:{inp:,}i/{out:,}o|turn:{session.turn_tokens_in:,}i/{session.turn_tokens_out:,}o|session:{session.token_usage['input']:,}i/{session.token_usage['output']:,}o\033[0m")
