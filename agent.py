@@ -126,26 +126,15 @@ def run(prompt: str, session: Session) -> None:
 def get_input():
     line = input("> ")
 
-    for delim in ('"""', "'''"):
-        prefix = ""
-        if line.strip() == delim:
-            pass  # Just the delimiter
-        elif line.rstrip().endswith(delim):
-            prefix = line.rstrip()[:-len(delim)].rstrip() + "\n"
-        else:
-            continue
-
-        # Collect lines until closing delimiter
+    # Multiline mode: type --- and press enter, then paste content, then --- to finish
+    if line.strip() == "---":
         lines = []
         while True:
             l = input()
-            if l.strip() == delim:
-                break
-            if l.rstrip().endswith(delim):
-                lines.append(l.rstrip()[:-len(delim)])
+            if l.strip() == "---":
                 break
             lines.append(l)
-        return prefix + "\n".join(lines)
+        return "\n".join(lines)
 
     return line
 
