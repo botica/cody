@@ -428,7 +428,7 @@ SCHEMAS = [
         },
         "required": ["query"]
     }},
-    {"name": "run_bash", "description": "Run a shell command in the working directory", "parameters": {
+    {"name": "run_bash", "description": "Run a shell command (use file tools for file operations)", "parameters": {
         "type": "object",
         "properties": {"command": {"type": "string", "description": "Command to run"}},
         "required": ["command"]
