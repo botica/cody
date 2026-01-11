@@ -7,7 +7,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from api import stream_completion, MODEL, check_config, MAX_TURN_COST
+from api import stream_completion, MODEL, check_config, MAX_TURN_COST, SHOW_REASONING
 from tools import execute_tool
 import printer
 
@@ -82,7 +82,8 @@ def run(prompt: str, session: Session) -> None:
         if text:
             assistant_msg["content"] = text
         if reasoning_details:
-            printer.reasoning(len(reasoning_details))
+            if SHOW_REASONING:
+                printer.reasoning(len(reasoning_details))
             assistant_msg["reasoning_details"] = reasoning_details
         session.conversation.append(assistant_msg)
 

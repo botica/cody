@@ -51,9 +51,11 @@ def check_config():
 #MODEL = "x-ai/grok-code-fast-1"
 #MODEL = "minimax/minimax-m2.1"
 #MODEL = "deepseek/deepseek-r1"
-#MODEL = "openai/gpt-5.2"
+MODEL = "openai/gpt-5.2"
 #MODEL = "z-ai/glm-4.7"
-MODEL = "google/gemini-3-pro-preview"
+#MODEL = "google/gemini-3-pro-preview"
+
+SHOW_REASONING = False  # set False to hide reasoning output
 
 MODEL_PRICING = {  # per million tokens (input, output)
     "google/gemini-3-flash-preview": (0.50, 3.00),
@@ -144,8 +146,9 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
 
                     reasoning = delta.get("reasoning") or delta.get("reasoning_content")
                     if reasoning:
-                        printer.stream_reasoning(reasoning)
-                        at_line_start = reasoning.endswith('\n')
+                        if SHOW_REASONING:
+                            printer.stream_reasoning(reasoning)
+                            at_line_start = reasoning.endswith('\n')
                         had_reasoning = True
 
                     content = delta.get("content")
