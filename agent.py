@@ -134,9 +134,9 @@ def get_input():
             if l.strip() == "---":
                 break
             lines.append(l)
-        return "\n".join(lines)
+        return "\n".join(lines), True
 
-    return line
+    return line, False
 
 
 def main():
@@ -157,13 +157,14 @@ def main():
 
     while True:
         try:
-            prompt = get_input()
+            prompt, multiline = get_input()
             if prompt.strip() == "/clear":
                 session.conversation = [{"role": "system", "content": get_system_prompt(session.cwd)}]
                 session.token_usage = {"input": 0, "output": 0, "cost": 0.0}
                 print("[cleared]")
                 continue
             if prompt.strip():
+                printer.user_input(prompt, extra_lines=2 if multiline else 0)
                 print()
                 run(prompt, session)
         except (KeyboardInterrupt, EOFError):

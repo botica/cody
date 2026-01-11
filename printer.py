@@ -13,6 +13,7 @@ COLORS = {
     "banner": "\033[38;5;216m",    # pale peach/orange - startup
     "stats": "\033[38;5;152m",     # pale steel blue - token stats
     "confirm": "\033[38;5;157m",   # light green - confirm prompts
+    "user_input": "\033[48;5;236m\033[38;5;255m",  # dark gray bg, white text - user input
 }
 
 def c(color: str, text: str) -> str:
@@ -176,3 +177,14 @@ def banner(name: str, model: str):
 def confirm(name: str, detail: str):
     """Print confirmation prompt."""
     print(f"\n{c('confirm', f'Confirm {name} {detail}? [y/n/!]')} ", end="", flush=True)
+
+
+def user_input(text: str, extra_lines: int = 0):
+    """Print user input with background highlight, replacing the echoed input."""
+    lines = text.splitlines() or [""]
+    # Clear all lines (content + any extra like multiline delimiters)
+    for _ in range(len(lines) + extra_lines):
+        print("\033[1A\033[2K", end="", flush=True)
+    # Print highlighted lines
+    for line in lines:
+        print(c('user_input', f' {line} '), flush=True)
