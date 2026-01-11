@@ -171,7 +171,13 @@ def config_error():
 
 def banner(name: str, model: str):
     """Print startup banner."""
-    print(c('banner', f"{name} [{model}]"))
+    import time
+    text = f"{name} [{model}]"
+    print(COLORS.get('banner', ''), end='', flush=True)
+    for char in text:
+        print(char, end='', flush=True)
+        time.sleep(0.015)
+    print(COLORS['reset'])
 
 
 def confirm(name: str, detail: str):
