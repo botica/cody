@@ -19,8 +19,7 @@ if sys.platform == 'win32':
 
 def get_system_prompt(cwd: str) -> str:
     return f"""You are an AI agent named Cody. You assist the user with general tasks, coding tasks, and have tools available for usage.
-Use your tools to complete the task. When searching the web, fetch at least one page for real content.
-All file paths should be absolute paths. Use the working directory below as reference.
+When searching the web, fetch at least one page for real content.
 
 Environment:
 - Working directory: {cwd}
