@@ -4,15 +4,16 @@
 COLORS = {
     "reset": "\033[0m",
     "tool": "\033[38;5;75m",       # blue - tool names
-    "arg": "\033[38;5;229m",       # pale yellow - arguments, file items
-    "info": "\033[38;5;240m",      # gray - secondary info
-    "added": "\033[38;5;114m",     # green - new/added content
-    "removed": "\033[38;5;203m",   # red - old/removed content
-    "reasoning": "\033[38;5;210m", # pink - reasoning blocks
-    "content": "\033[38;5;189m",   # lavender - main output
-    "banner": "\033[38;5;216m",    # pale peach/orange - startup
-    "stats": "\033[38;5;152m",     # pale steel blue - token stats
-    "confirm": "\033[38;5;157m",   # light green - confirm prompts
+    "arg": "\033[38;5;174m",       # soft dark pink - arguments, file items
+    "info": "\033[38;5;42m",       # emerald - secondary info
+    "bash": "\033[38;5;206m",      # hot pink - bash output
+    "added": "\033[48;5;218m\033[38;5;0m",     # reasoning pink bg - new/added
+    "removed": "\033[48;5;174m\033[38;5;0m",  # soft dark pink bg - old/removed
+    "reasoning": "\033[38;5;218m", # pink - reasoning blocks
+    "content": "\033[38;5;183m",   # light lavender - main output
+    "banner": "\033[38;5;183m",    # light lavender - startup/prompt
+    "stats": "\033[38;5;75m",      # blue - token stats
+    "confirm": "\033[38;5;117m",   # soft light blue - confirm prompts
     "user_input": "\033[48;5;236m\033[38;5;255m",  # dark gray bg, white text - user input
 }
 
@@ -34,13 +35,12 @@ def tool_path(name: str, path: str):
     print(f"{c('tool', f'[{name}]')} {c('arg', path)}")
 
 
-def edit_diff(path: str, old: str, new: str, insert_before: bool = False, insert_after: bool = False, max_lines: int = 4):
+def edit_diff(path: str, old: str, new: str, max_lines: int = 4):
     """Print an edit_file diff preview."""
     print(f"{c('tool', '[edit_file]')} {c('arg', path)}")
 
     def show_lines(text: str, prefix: str, color: str):
         lines = text.splitlines() if text else []
-        # Filter to non-empty lines for preview, but count all
         preview_lines = [l for l in lines if l.strip()][:max_lines]
         total = len(lines)
 
@@ -54,23 +54,11 @@ def edit_diff(path: str, old: str, new: str, insert_before: bool = False, insert
 
         remaining = total - len(preview_lines)
         if remaining > 0:
-            print(f"  {c('info', f'  ... +{remaining} more lines')}")
+            print(f"  {c('tool', f'  ... +{remaining} more lines')}")
 
-    if insert_after:
-        # old is anchor, new is inserted after
-        if old:
-            show_lines(old, '@', 'info')  # anchor marker
-        show_lines(new, '+', 'added')
-    elif insert_before:
-        # new is inserted before old (anchor)
-        show_lines(new, '+', 'added')
-        if old:
-            show_lines(old, '@', 'info')  # anchor marker
-    else:
-        # replacement mode
-        if old:
-            show_lines(old, '-', 'removed')
-        show_lines(new, '+', 'added')
+    if old:
+        show_lines(old, '-', 'removed')
+    show_lines(new, '+', 'added')
 
 
 def write_preview(path: str, content: str):

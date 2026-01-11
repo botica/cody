@@ -138,8 +138,7 @@ def write_file(path: str, content: str, session=None) -> str:
         return f"Error: {e}"
 
 
-def edit_file(path: str, new_string: str, old_string: str = "", replace_all: bool = False,
-               insert_before: bool = False, insert_after: bool = False, session=None) -> str:
+def edit_file(path: str, new_string: str, old_string: str = "", replace_all: bool = False, session=None) -> str:
     try:
         full_path = _resolve_in_workspace(session, path)
         with open(full_path, "r", encoding="utf-8") as f:
@@ -152,9 +151,8 @@ def edit_file(path: str, new_string: str, old_string: str = "", replace_all: boo
             return f"Appended to {path}"
 
         if old_string not in content:
-            # Find similar lines to help model recover
             lines = content.splitlines()
-            old_start = old_string.split('\n')[0][:40]  # first line of old_string
+            old_start = old_string.split('\n')[0][:40]
             similar = [l.strip()[:60] for l in lines if old_start[:20].lower() in l.lower()][:3]
             hint = f" Similar lines: {similar}" if similar else f" File has {len(lines)} lines."
             return f"Error: old_string not found in {path}.{hint}"
@@ -163,29 +161,14 @@ def edit_file(path: str, new_string: str, old_string: str = "", replace_all: boo
         if count > 1 and not replace_all:
             return f"Error: old_string appears {count} times in {path}. Use replace_all=true to replace all."
 
-        # Determine replacement based on mode
-        if insert_before:
-            replacement = new_string + old_string
-        elif insert_after:
-            replacement = old_string + new_string
-        else:
-            replacement = new_string
-
         with open(full_path, "w", encoding="utf-8") as f:
             if replace_all:
-                f.write(content.replace(old_string, replacement))
+                f.write(content.replace(old_string, new_string))
             else:
-                f.write(content.replace(old_string, replacement, 1))
+                f.write(content.replace(old_string, new_string, 1))
 
-        # Build result message
-        if insert_before:
-            action = f"Inserted before"
-        elif insert_after:
-            action = f"Inserted after"
-        else:
-            action = "Edited"
-        suffix = f" ({count} locations)" if replace_all and count > 1 else ""
-        return f"{action} {path}{suffix}"
+        suffix = f" ({count} replacements)" if replace_all and count > 1 else ""
+        return f"Edited {path}{suffix}"
     except PermissionError as e:
         return f"Error: {e}"
     except FileNotFoundError:
@@ -336,7 +319,7 @@ def run_bash(command: str, session=None) -> str:
         )
         lines = []
         for line in proc.stdout:
-            print(line, end="", flush=True)
+            print(printer.c('arg', line.rstrip()))
             lines.append(line)
         try:
             exit_code = proc.wait(timeout=300)  # 5 min timeout
@@ -383,15 +366,13 @@ SCHEMAS = [
         },
         "required": ["path", "content"]
     }},
-    {"name": "edit_file", "description": "Modify existing files. If old_string is omitted, appends to end of file. Otherwise finds old_string and replaces/inserts.", "parameters": {
+    {"name": "edit_file", "description": "Modify existing files. Replaces old_string with new_string, or appends if old_string is omitted.", "parameters": {
         "type": "object",
         "properties": {
-            "path": {"type": "string", "description": "Path relative to workspace (session.cwd) or absolute path within workspace"},
-            "new_string": {"type": "string", "description": "Content to insert or replacement text"},
-            "old_string": {"type": "string", "description": "String to find (omit to append to end of file)"},
-            "replace_all": {"type": "boolean", "description": "Apply to all occurrences (default: false, requires unique match)"},
-            "insert_before": {"type": "boolean", "description": "Insert new_string before old_string instead of replacing"},
-            "insert_after": {"type": "boolean", "description": "Insert new_string after old_string instead of replacing"},
+            "path": {"type": "string", "description": "Path relative to workspace or absolute path within workspace"},
+            "new_string": {"type": "string", "description": "Replacement text (or text to append)"},
+            "old_string": {"type": "string", "description": "Text to find and replace (omit to append)"},
+            "replace_all": {"type": "boolean", "description": "Replace all occurrences (default: false)"},
         },
         "required": ["path", "new_string"]
     }},

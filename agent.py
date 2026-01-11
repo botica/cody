@@ -104,9 +104,7 @@ def run(prompt: str, session: Session) -> None:
                     printer.edit_diff(
                         args.get('path', ''),
                         args.get('old_string', ''),
-                        args.get('new_string', ''),
-                        insert_before=args.get('insert_before', False),
-                        insert_after=args.get('insert_after', False)
+                        args.get('new_string', '')
                     )
                 else:
                     args_str = " ".join(f"{k}={str(v)[:60]}" for k, v in args.items())
@@ -123,7 +121,7 @@ def run(prompt: str, session: Session) -> None:
 
 
 def get_input():
-    line = input("> ")
+    line = input(printer.c('banner', '> '))
 
     # Multiline mode: type --- and press enter, then paste content, then --- to finish
     if line.strip() == "---":
