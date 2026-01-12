@@ -138,7 +138,7 @@ def write_file(path: str, content: str, session=None) -> str:
         return f"Error: {e}"
 
 
-def edit_file(path: str, new_string: str, old_string: str = "", replace_all: bool = False, session=None) -> str:
+def edit_file(path: str, new_string: str = "", old_string: str = "", replace_all: bool = False, session=None) -> str:
     try:
         full_path = _resolve_in_workspace(session, path)
         with open(full_path, "r", encoding="utf-8") as f:
@@ -366,15 +366,15 @@ SCHEMAS = [
         },
         "required": ["path", "content"]
     }},
-    {"name": "edit_file", "description": "Modify existing files. Replaces old_string with new_string, or appends if old_string is omitted.", "parameters": {
+    {"name": "edit_file", "description": "Modify existing files. Replaces old_string with new_string. Omit new_string to delete, omit old_string to append.", "parameters": {
         "type": "object",
         "properties": {
             "path": {"type": "string", "description": "Path relative to workspace or absolute path within workspace"},
-            "new_string": {"type": "string", "description": "Replacement text (or text to append)"},
-            "old_string": {"type": "string", "description": "Text to find and replace (omit to append)"},
+            "new_string": {"type": "string", "description": "Replacement text (omit to delete old_string)"},
+            "old_string": {"type": "string", "description": "Text to find and replace (omit to append new_string)"},
             "replace_all": {"type": "boolean", "description": "Replace all occurrences (default: false)"},
         },
-        "required": ["path", "new_string"]
+        "required": ["path"]
     }},
     {"name": "delete_file", "description": "Delete a file or directory", "parameters": {
         "type": "object",

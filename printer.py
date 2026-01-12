@@ -126,7 +126,8 @@ def debug(msg: str):
 
 def stream_reasoning(text: str):
     """Print streaming reasoning content."""
-    print(c('reasoning', text), end="", flush=True)
+    # \033[K clears from cursor to end of line, preventing bg color bleed
+    print(f"{COLORS['reasoning']}{text}{COLORS['reset']}\033[K", end="", flush=True)
 
 
 def stream_content(text: str):

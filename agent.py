@@ -1,12 +1,7 @@
 """Cody (from the movie) terminal agent with tool
-
-fix reasoninng blcosk still printed
-fix trafuliatra char line putput is unstyled
 serach and edit need lookovers, change output to Not Lie THis Cuz This Is Dumb
 implement a bug fix when you type over mulitple lines and it doesnt grab clear the input before
 it prints it properly
-refine prompt so it knows it needs to fetch a page if it had to make a search
-the ....(34 lines today) in write file is a shitty green
 """
 
 import argparse

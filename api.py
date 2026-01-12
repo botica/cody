@@ -37,7 +37,8 @@ def _get_api_key():
 
 OPENROUTER_API_KEY = _get_api_key()
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MAX_TURN_COST = 1.50  # max cost per turn in dollars
+MAX_TURN_COST = 0.50  # max cost per turn in dollars
+SHOW_REASONING = True  # set False to hide reasoning output
 
 
 def check_config():
@@ -47,15 +48,13 @@ def check_config():
         return False
     return True
 
-MODEL = "google/gemini-3-flash-preview"
+#MODEL = "google/gemini-3-flash-preview"
 #MODEL = "x-ai/grok-code-fast-1"
 #MODEL = "minimax/minimax-m2.1"
 #MODEL = "deepseek/deepseek-r1"
 #MODEL = "openai/gpt-5.2"
 #MODEL = "z-ai/glm-4.7"
-#MODEL = "google/gemini-3-pro-preview"
-
-SHOW_REASONING = False  # set False to hide reasoning output
+MODEL = "google/gemini-3-pro-preview"
 
 MODEL_PRICING = {  # per million tokens (input, output)
     "google/gemini-3-flash-preview": (0.50, 3.00),
