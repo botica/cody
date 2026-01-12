@@ -28,7 +28,8 @@ if sys.platform == 'win32':
 
 def get_system_prompt(cwd: str) -> str:
     return f"""You are an AI agent named Cody. You assist the user with general tasks, coding tasks, and have tools available for usage.
-When searching the web, fetch at least one page for real content.
+
+Use your knowledge for basic facts. Only search for current events, real-time data, or things you don't know. When you DO use web_search, it only returns titles and snippets - you MUST fetch_webpage on at least one result to get actual content.
 
 Environment:
 - Working directory: {cwd}
@@ -170,7 +171,6 @@ def main():
                 continue
             if prompt.strip():
                 printer.user_input(prompt, extra_lines=2 if multiline else 0)
-                printer.separator()
                 run(prompt, session)
         except (KeyboardInterrupt, EOFError):
             print()

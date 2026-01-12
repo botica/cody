@@ -65,10 +65,10 @@ def write_preview(path: str, content: str):
     """Print a write_file preview."""
     all_lines = content.splitlines()
     lines = all_lines[:10]
-    preview = '\n'.join(f"  {c('arg', line[:100])}" for line in lines)
+    preview = '\n'.join(f"  {c('tool', line[:100])}" for line in lines)
     if len(all_lines) > 10:
-        preview += f"\n  {c('info', f'... ({len(all_lines)} lines total)')}"
-    print(f"{c('tool', '[write_file]')} {c('arg', path)}\n{preview}")
+        preview += f"\n  {c('tool', f'... ({len(all_lines)} lines total)')}"
+    print(f"{c('tool', '[write_file]')} {c('tool', path)}\n{preview}")
 
 
 def reasoning(count: int):
