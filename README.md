@@ -6,10 +6,11 @@
 <p>run with <code>--yolo</code> flag to auto confirm for session</p>
 <p><code>/clear</code> deletes all context and token counts</p>
 <p>enter <code>---</code> on its own line to begin multi-line input; end your multiple-lines-pasting with <code>---</code> on its own line.</p>
-<p>ctrl-c kills cody.</p>
-<p>--> <code>python agent.py</code> after install reqs and rg</p>
-<p><a href="https://github.com/BurntSushi/ripgrep">ripgrep</a></p>
+<p>ctrl-c kills the program.</p>
+<p>run as <code>python agent.py</code> after installing the dependencies in requirements.txt as well as <a href="https://github.com/BurntSushi/ripgrep">ripgrep</a> (for search)</p>
 <br>
+without reasoning:
 <img src="./imgs/screen3.png" width="800px">
 <br>
+reasoning:
 <img src="./imgs/screen4.png" width="800px">
