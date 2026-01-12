@@ -19,7 +19,7 @@ CONFIRM_TOOLS = {"write_file", "edit_file", "delete_file", "fetch_webpage", "web
 
 
 def confirm_action(name: str, args: dict, session) -> bool:
-    if session.auto_confirm_turn:
+    if session.yolo or session.auto_confirm_turn:
         return True
 
     if name == "edit_file":

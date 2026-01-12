@@ -46,6 +46,7 @@ class Session:
     turn_tokens_in: int = 0
     turn_tokens_out: int = 0
     auto_confirm_turn: bool = False
+    yolo: bool = False
     conversation: list = field(default_factory=list)
 
     def __post_init__(self):
@@ -148,6 +149,7 @@ def get_input():
 def main():
     parser = argparse.ArgumentParser(description="Cody terminal agent")
     parser.add_argument('--cwd', '-C', default=os.getcwd(), help='Working directory')
+    parser.add_argument('--yolo', action='store_true', help='Skip all confirmations')
     args = parser.parse_args()
 
     cwd = os.path.abspath(args.cwd)
@@ -158,7 +160,7 @@ def main():
     if not check_config():
         sys.exit(1)
 
-    session = Session(cwd=cwd)
+    session = Session(cwd=cwd, yolo=args.yolo)
     printer.banner("Cody", MODEL)
 
     while True:

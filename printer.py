@@ -78,7 +78,7 @@ def reasoning(count: int):
 
 def limit_warning(cost: float):
     """Print turn cost limit warning."""
-    print(f"\n[limit] Turn exceeded ${cost:.2f}, cancelling")
+    print(c('tool', f"\n[limit] Turn exceeded ${cost:.2f}, cancelling"))
 
 
 def item(text: str):
@@ -104,24 +104,24 @@ def fetch_stats(method: str, raw: int, processed: int):
 
 def fetch_browser_start():
     """Print browser launch message."""
-    print(f"{c('tool', '[browser]')} {c('arg', 'launching...')}", end="", flush=True)
+    print(f"{c('tool', '[browser]')} {c('tool', 'launching...')}", end="", flush=True)
 
 
 def fetch_browser_done():
     """Print browser done message."""
-    print(f" done{COLORS['reset']}")
+    print(c('tool', " done"))
 
 
 # --- API / streaming ---
 
 def error(msg: str):
     """Print an error message."""
-    print(f"[error] {msg}")
+    print(c('tool', f"[error] {msg}"))
 
 
 def debug(msg: str):
     """Print a debug message."""
-    print(f"[debug] {msg}")
+    print(c('tool', f"[debug] {msg}"))
 
 
 def stream_reasoning(text: str):
@@ -157,9 +157,9 @@ def usage(call_in: int, call_out: int, call_cost: float | None,
 
 def config_error():
     """Print API key configuration error."""
-    print("Error: OPENROUTER_API_KEY not set")
-    print("Create a .env file with:")
-    print("  OPENROUTER_API_KEY=your_key_here")
+    print(c('tool', "Error: OPENROUTER_API_KEY not set"))
+    print(c('tool', "Create a .env file with:"))
+    print(c('tool', "  OPENROUTER_API_KEY=your_key_here"))
 
 
 def banner(name: str, model: str):
