@@ -244,7 +244,7 @@ def fetch_webpage(url: str, use_browser: bool = False, session=None) -> str:
 
     def process(text):
         lines = [l.strip() for l in text.splitlines() if l.strip()]
-        print(f"{len(lines)} lines, {len(text)} chars")
+        print(printer.c('tool', f"{len(lines)} lines, {len(text)} chars"))
         return "\n".join(lines)
 
     def extract(html: str) -> str:
@@ -319,7 +319,7 @@ def run_bash(command: str, session=None) -> str:
         )
         lines = []
         for line in proc.stdout:
-            print(printer.c('arg', line.rstrip()))
+            print(printer.c('tool', line.rstrip()))
             lines.append(line)
         try:
             exit_code = proc.wait(timeout=300)  # 5 min timeout

@@ -37,7 +37,7 @@ def _get_api_key():
 
 OPENROUTER_API_KEY = _get_api_key()
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MAX_TURN_COST = 0.50  # max cost per turn in dollars
+MAX_TURN_COST = 1.50  # max cost per turn in dollars
 
 
 def check_config():
@@ -47,11 +47,11 @@ def check_config():
         return False
     return True
 
-#MODEL = "google/gemini-3-flash-preview"
+MODEL = "google/gemini-3-flash-preview"
 #MODEL = "x-ai/grok-code-fast-1"
 #MODEL = "minimax/minimax-m2.1"
 #MODEL = "deepseek/deepseek-r1"
-MODEL = "openai/gpt-5.2"
+#MODEL = "openai/gpt-5.2"
 #MODEL = "z-ai/glm-4.7"
 #MODEL = "google/gemini-3-pro-preview"
 
@@ -145,18 +145,17 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
                         reasoning_details = delta["reasoning_details"]
 
                     reasoning = delta.get("reasoning") or delta.get("reasoning_content")
-                    if reasoning:
-                        if SHOW_REASONING:
-                            printer.stream_reasoning(reasoning)
-                            at_line_start = reasoning.endswith('\n')
+                    if reasoning and SHOW_REASONING:
+                        printer.stream_reasoning(reasoning)
+                        at_line_start = reasoning.endswith('\n')
                         had_reasoning = True
 
                     content = delta.get("content")
                     if content:
                         if had_reasoning:
                             if not at_line_start:
+                                print(printer.COLORS['reset'], end='', flush=True)
                                 printer.newline()
-                            printer.newline()
                             had_reasoning = False
                         printer.stream_content(content)
                         current_text += content
@@ -179,6 +178,7 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
                     printer.debug(f"JSON decode error: {e} in: {data[:100]}")
 
     if not at_line_start:
+        print(printer.COLORS['reset'], end='', flush=True)
         printer.newline()
 
     if call_usage:

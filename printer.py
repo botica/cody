@@ -7,14 +7,14 @@ COLORS = {
     "arg": "\033[38;5;174m",       # soft dark pink - arguments, file items
     "info": "\033[38;5;42m",       # emerald - secondary info
     "bash": "\033[38;5;206m",      # hot pink - bash output
-    "added": "\033[48;5;218m\033[38;5;0m",     # reasoning pink bg - new/added
-    "removed": "\033[48;5;174m\033[38;5;0m",  # soft dark pink bg - old/removed
-    "reasoning": "\033[38;5;218m", # pink - reasoning blocks
+    "added": "\033[38;5;183m",     # light lavender - new/added
+    "removed": "\033[48;5;233m\033[38;5;23m",  # dark grey bg, teal text - old/removed
+    "reasoning": "\033[48;5;233m\033[38;5;23m", # super dark grey bg, teal text - reasoning
     "content": "\033[38;5;183m",   # light lavender - main output
     "banner": "\033[38;5;183m",    # light lavender - startup/prompt
-    "stats": "\033[38;5;75m",      # blue - token stats
-    "confirm": "\033[38;5;117m",   # soft light blue - confirm prompts
-    "user_input": "\033[48;5;236m\033[38;5;255m",  # dark gray bg, white text - user input
+    "stats": "\033[38;5;23m",      # teal - token stats
+    "confirm": "\033[38;5;75m",    # blue - confirm prompts
+    "user_input": "\033[48;5;23m\033[38;5;255m",  # dark teal bg, white text - user input
 }
 
 def c(color: str, text: str) -> str:
@@ -25,19 +25,19 @@ def c(color: str, text: str) -> str:
 def tool_call(name: str, args_str: str = ""):
     """Print a tool call header."""
     if args_str:
-        print(f"{c('tool', f'[{name}]')} {c('arg', args_str)}")
+        print(f"{c('tool', f'[{name}]')} {c('tool', args_str)}")
     else:
         print(f"{c('tool', f'[{name}]')}")
 
 
 def tool_path(name: str, path: str):
     """Print a tool call with a path."""
-    print(f"{c('tool', f'[{name}]')} {c('arg', path)}")
+    print(f"{c('tool', f'[{name}]')} {c('tool', path)}")
 
 
 def edit_diff(path: str, old: str, new: str, max_lines: int = 4):
     """Print an edit_file diff preview."""
-    print(f"{c('tool', '[edit_file]')} {c('arg', path)}")
+    print(f"{c('tool', '[edit_file]')} {c('tool', path)}")
 
     def show_lines(text: str, prefix: str, color: str):
         lines = text.splitlines() if text else []
@@ -83,23 +83,23 @@ def limit_warning(cost: float):
 
 def item(text: str):
     """Print a list item (like directory entries)."""
-    print(f"  {c('arg', text)}")
+    print(f"  {c('tool', text)}")
 
 
 def search_result(title: str):
     """Print a search result title."""
-    print(f"  {c('arg', f'- {title}')}")
+    print(f"  {c('tool', f'- {title}')}")
 
 
 def search_query(backend: str, query: str):
     """Print search query info."""
-    print(f"{c('tool', f'[search:{backend}]')} {c('arg', repr(query))}")
+    print(f"{c('tool', f'[search:{backend}]')} {c('tool', repr(query))}")
 
 
 def fetch_stats(method: str, raw: int, processed: int):
     """Print fetch/extraction stats."""
     reduction = 100 - processed / raw * 100 if raw > 0 else 0
-    print(f"{c('tool', f'[{method}]')} {c('arg', f'{raw:,} -> {processed:,} chars ({reduction:.0f}% reduction)')}")
+    print(f"{c('tool', f'[{method}]')} {c('tool', f'{raw:,} -> {processed:,} chars ({reduction:.0f}% reduction)')}")
 
 
 def fetch_browser_start():
@@ -139,6 +139,11 @@ def newline():
     print()
 
 
+def separator():
+    """Print a separator between user input and response."""
+    print(c('banner', "-----"))
+
+
 def usage(call_in: int, call_out: int, call_cost: float | None,
           turn_in: int, turn_out: int, turn_cost: float | None,
           sess_in: int, sess_out: int, sess_cost: float | None):
@@ -147,7 +152,7 @@ def usage(call_in: int, call_out: int, call_cost: float | None,
         msg = f"[tokens] call: {call_in:,}i/{call_out:,}o ${call_cost:.4f}|turn: {turn_in:,}i/{turn_out:,}o ${turn_cost:.4f}|session: {sess_in:,}i/{sess_out:,}o ${sess_cost:.4f}"
     else:
         msg = f"[tokens] call: {call_in:,}i/{call_out:,}o|turn: {turn_in:,}i/{turn_out:,}o|session: {sess_in:,}i/{sess_out:,}o"
-    print(c('stats', msg))
+    print(c('tool', msg))
 
 
 def config_error():
@@ -159,13 +164,7 @@ def config_error():
 
 def banner(name: str, model: str):
     """Print startup banner."""
-    import time
-    text = f"{name} [{model}]"
-    print(COLORS.get('banner', ''), end='', flush=True)
-    for char in text:
-        print(char, end='', flush=True)
-        time.sleep(0.015)
-    print(COLORS['reset'])
+    print(f"{COLORS.get('banner', '')}{name} [{model}]{COLORS['reset']}")
 
 
 def confirm(name: str, detail: str):
