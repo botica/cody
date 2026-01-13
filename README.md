@@ -5,7 +5,7 @@
 <p>enter <code>'!'</code> instead of <code>y/n</code> to auto-confirm tools for the turn.</p>
 <p>run with <code>--yolo</code> flag to auto confirm for session</p>
 <p><code>/clear</code> deletes all context and token counts</p>
-<p>enter <code>---</code> on its own line to begin multi-line input; end your multiple-lines-pasting with <code>---</code> on its own line.</p>
+<p>enter <code>---</code> on its own line to begin multi-line input; end your multiline input with  <code>---</code> on its own line.</p>
 <p>ctrl-c kills the program.</p>
 <p>run as <code>python agent.py</code> after installing the dependencies in requirements.txt as well as <a href="https://github.com/BurntSushi/ripgrep">ripgrep</a> (for search)</p>
 <br>

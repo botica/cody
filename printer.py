@@ -180,11 +180,28 @@ def confirm(name: str, detail: str):
     print(f"\n{c('confirm', f'Confirm {name} {detail}? [y/n/!]')} ", end="", flush=True)
 
 
-def user_input(text: str, extra_lines: int = 0):
+def user_input(text: str, extra_lines: int = 0, prompt_len: int = 2):
     """Print user input with background highlight, replacing the echoed input."""
+    import os
+    try:
+        term_width = os.get_terminal_size().columns
+    except OSError:
+        term_width = 80  # fallback
+
     lines = text.splitlines() or [""]
-    # Clear all lines (content + any extra like multiline delimiters)
-    for _ in range(len(lines) + extra_lines):
+
+    # Calculate visual rows: each logical line may wrap based on terminal width
+    visual_rows = extra_lines
+    for i, line in enumerate(lines):
+        # First line has the prompt, others don't
+        line_len = len(line) + (prompt_len if i == 0 else 0)
+        if line_len == 0:
+            visual_rows += 1
+        else:
+            visual_rows += (line_len + term_width - 1) // term_width  # ceiling division
+
+    # Clear all visual rows
+    for _ in range(visual_rows):
         print("\033[1A\033[2K", end="", flush=True)
     # Print highlighted lines
     for line in lines:
