@@ -22,10 +22,17 @@ def c(color: str, text: str) -> str:
     return f"{COLORS.get(color, '')}{text}{COLORS['reset']}"
 
 
-def tool_call(name: str, args_str: str = ""):
-    """Print a tool call header."""
-    if args_str:
+def tool_call(name: str, args: dict | str = None):
+    """Print a tool call with appropriate formatting based on tool type."""
+    if name == 'write_file' and isinstance(args, dict) and 'content' in args:
+        write_preview(args.get('path', ''), args['content'])
+    elif name == 'edit_file' and isinstance(args, dict):
+        edit_diff(args.get('path', ''), args.get('old_string', ''), args.get('new_string', ''))
+    elif isinstance(args, dict) and args:
+        args_str = " ".join(f"{k}={str(v)[:60]}" for k, v in args.items())
         print(f"{c('tool', f'[{name}]')} {c('tool', args_str)}")
+    elif isinstance(args, str) and args:
+        print(f"{c('tool', f'[{name}]')} {c('tool', args)}")
     else:
         print(f"{c('tool', f'[{name}]')}")
 

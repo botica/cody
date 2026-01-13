@@ -102,21 +102,7 @@ def run(prompt: str, session: Session) -> None:
                 })
                 continue
 
-            if args:
-                if tc['name'] == 'write_file' and 'content' in args:
-                    printer.write_preview(args.get('path', ''), args['content'])
-                elif tc['name'] == 'edit_file':
-                    printer.edit_diff(
-                        args.get('path', ''),
-                        args.get('old_string', ''),
-                        args.get('new_string', '')
-                    )
-                else:
-                    args_str = " ".join(f"{k}={str(v)[:60]}" for k, v in args.items())
-                    printer.tool_call(tc['name'], args_str)
-            else:
-                printer.tool_call(tc['name'])
-
+            printer.tool_call(tc['name'], args)
             result = execute_tool(tc["name"], args, session)
             session.conversation.append({
                 "role": "tool",
