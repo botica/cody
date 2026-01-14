@@ -56,11 +56,6 @@ def _load_config():
             else:
                 _config[key] = value
 
-    # Environment variable takes priority for API key
-    env_key = os.environ.get("OPENROUTER_API_KEY")
-    if env_key:
-        _config["api_key"] = env_key
-
     return _config
 
 
