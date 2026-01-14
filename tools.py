@@ -1,4 +1,4 @@
-"""Tools for cody"""
+"""Tools and Schemas for cody"""
 
 import inspect
 import os
@@ -14,8 +14,9 @@ import trafilatura
 from ddgs import DDGS
 from playwright.sync_api import sync_playwright
 import printer
+import config
 
-CONFIRM_TOOLS = {"write_file", "edit_file", "delete_file", "fetch_webpage", "web_search", "run_bash"}
+CONFIRM_TOOLS = config.CONFIRM_TOOLS
 
 
 def confirm_action(name: str, args: dict, session) -> bool:
@@ -86,8 +87,8 @@ def _resolve_in_workspace(session, user_path: str) -> str:
 def read_file(path: str, offset=None, limit=None, session=None) -> str:
     try:
         full_path = _resolve_in_workspace(session, path)
-        if os.path.getsize(full_path) > 10_000_000:  # 10MB limit
-            return f"Error: File too large (>10MB): {path}"
+        if os.path.getsize(full_path) > config.FILE_SIZE_LIMIT:
+            return f"Error: File too large (>{config.FILE_SIZE_LIMIT // 1_000_000}MB): {path}"
         with open(full_path, encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
 

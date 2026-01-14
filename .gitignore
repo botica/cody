@@ -4,6 +4,7 @@ nul
 .claude/
 .cody/
 .env
+config.json
 
 # Python
 __pycache__/

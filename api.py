@@ -1,75 +1,35 @@
 """OpenRouter API streaming and response handling."""
 
 import json
-import os
 import uuid
 import requests
 
 from tools import get_tools_schema
 import printer
+import config
 
-
-def _load_env_file(path=".env"):
-    """Load .env file into os.environ."""
-    if not os.path.exists(path):
-        return
-    try:
-        with open(path, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith('#'):
-                    continue
-                if '=' in line:
-                    key, value = line.split('=', 1)
-                    os.environ[key.strip()] = value.strip()
-    except IOError:
-        pass
-
-
-def _get_api_key():
-    """Get API key from environment variables or .env file."""
-    # Load .env file if it exists
-    _load_env_file()
-
-    # Check environment variable
-    return os.environ.get("OPENROUTER_API_KEY")
-
-
-OPENROUTER_API_KEY = _get_api_key()
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MAX_TURN_COST = 0.50  # max cost per turn in dollars
-SHOW_REASONING = True  # set False to hide reasoning output
+
+# Re-export config values for backwards compatibility
+MODEL = config.MODEL
+MODEL_PRICING = config.MODEL_PRICING
+MAX_TURN_COST = config.MAX_TURN_COST
+SHOW_REASONING = config.SHOW_REASONING
 
 
 def check_config():
-    """Check if API key is configured."""
-    if not OPENROUTER_API_KEY:
-        printer.config_error()
-        return False
+    """Check if API key is configured, prompt if missing."""
+    if not config.API_KEY:
+        if not config.prompt_api_key():
+            return False
+        # Reload the module-level constant
+        config.API_KEY = config._cfg["api_key"]
     return True
-
-#MODEL = "google/gemini-3-flash-preview"
-#MODEL = "x-ai/grok-code-fast-1"
-#MODEL = "minimax/minimax-m2.1"
-#MODEL = "deepseek/deepseek-r1"
-#MODEL = "openai/gpt-5.2"
-#MODEL = "z-ai/glm-4.7"
-MODEL = "google/gemini-3-pro-preview"
-
-MODEL_PRICING = {  # per million tokens (input, output)
-    "google/gemini-3-flash-preview": (0.50, 3.00),
-    "minimax/minimax-m2.1": (0.30, 1.20),
-    "x-ai/grok-code-fast-1": (0.20, 1.50),
-    "z-ai/glm-4.7": (0.40, 1.50),
-    "deepseek/deepseek-r1": (0.70, 2.40),
-    "openai/gpt-5.2": (1.75, 14.00),
-    "google/gemini-3-pro-preview": (2.00, 12.00),
-}
 
 
 def stream_completion(conversation: list, session) -> tuple[str, list[dict], dict | None]:
     headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Authorization": f"Bearer {config.API_KEY}",
         "Content-Type": "application/json"
     }
 

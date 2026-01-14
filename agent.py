@@ -1,8 +1,4 @@
-"""Cody (from the movie) terminal agent with tool
-serach and edit need lookovers, change output to Not Lie THis Cuz This Is Dumb
-implement a bug fix when you type over mulitple lines and it doesnt grab clear the input before
-it prints it properly
-"""
+"""Cody - terminal agent with tools"""
 
 import argparse
 import json
@@ -14,6 +10,7 @@ from datetime import datetime
 from api import stream_completion, MODEL, check_config, MAX_TURN_COST, SHOW_REASONING
 from tools import execute_tool
 import printer
+import config
 
 if sys.platform == 'win32':
     import io
@@ -22,15 +19,11 @@ if sys.platform == 'win32':
 
 
 def get_system_prompt(cwd: str) -> str:
-    return f"""You are an AI agent named Cody. You assist the user with general tasks, coding tasks, and have tools available for usage.
-
-Use your knowledge for basic facts. Only search for current events, real-time data, or things you don't know. When you DO use web_search, it only returns titles and snippets - you MUST fetch_webpage on at least one result to get actual content.
-
-Environment:
-- Working directory: {cwd}
-- Platform: {sys.platform}
-- Date: {datetime.now().strftime('%Y-%m-%d')}
-"""
+    return config.SYSTEM_PROMPT_TEMPLATE.format(
+        cwd=cwd,
+        platform=sys.platform,
+        date=datetime.now().strftime('%Y-%m-%d')
+    )
 
 
 @dataclass
