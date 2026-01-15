@@ -1,9 +1,9 @@
 """Configuration loader for Cody."""
 
-import json
+import tomllib
 import os
 
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.toml")
 
 DEFAULTS = {
     "api_key": "",
@@ -43,10 +43,10 @@ def _load_config():
     # Start with defaults
     _config = {k: v for k, v in DEFAULTS.items()}
 
-    # Override with config.json if it exists
+    # Override with config.toml if it exists
     if os.path.exists(CONFIG_PATH):
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            file_config = json.load(f)
+        with open(CONFIG_PATH, "rb") as f:
+            file_config = tomllib.load(f)
 
         for key, value in file_config.items():
             if key == "model_pricing":
@@ -60,19 +60,55 @@ def _load_config():
 
 
 def _save_config(config):
-    """Save config to config.json."""
-    # Convert sets/tuples for JSON serialization
-    save_config = {}
-    for key, value in config.items():
-        if key == "model_pricing":
-            save_config[key] = {k: list(v) for k, v in value.items()}
-        elif key == "confirm_tools":
-            save_config[key] = list(value)
-        else:
-            save_config[key] = value
+    """Save config to config.toml with comments."""
+    # Build pricing lines
+    pricing_lines = []
+    for model, prices in config["model_pricing"].items():
+        pricing_lines.append(f'"{model}" = [{prices[0]}, {prices[1]}]')
+
+    # Build confirm_tools array
+    tools_list = ", ".join(f'"{t}"' for t in sorted(config["confirm_tools"]))
+
+    # Escape the system prompt for TOML multiline string
+    system_prompt = config["system_prompt"]
+
+    toml_content = f'''# Cody Configuration
+# Edit this file to customize your setup. Changes take effect on restart.
+
+# Your OpenRouter API key (get one at https://openrouter.ai/keys)
+api_key = "{config["api_key"]}"
+
+# Model to use (browse available models at https://openrouter.ai/models)
+# Format: "provider/model-name"
+model = "{config["model"]}"
+
+# Maximum cost per turn in USD - prevents runaway API costs
+max_turn_cost = {config["max_turn_cost"]}
+
+# Show model reasoning/thinking output (for models that support it)
+show_reasoning = {str(config["show_reasoning"]).lower()}
+
+# Maximum file size in bytes that can be read (default: 10MB)
+file_size_limit = {config["file_size_limit"]}
+
+# Tools that require user confirmation before running
+# Available: "write_file", "edit_file", "delete_file", "fetch_webpage", "web_search", "run_bash", "read_file", "list_directory"
+confirm_tools = [{tools_list}]
+
+# Model pricing for cost tracking
+# Format: "provider/model-name" = [input_cost_per_million, output_cost_per_million]
+# Find pricing at https://openrouter.ai/models
+[model_pricing]
+{chr(10).join(pricing_lines)}
+
+# System prompt sent to the model
+# Placeholders: {{cwd}}, {{platform}}, {{date}}
+system_prompt = \'\'\'
+{system_prompt}\'\'\'
+'''
 
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump(save_config, f, indent=2)
+        f.write(toml_content)
 
 
 def prompt_api_key():
@@ -92,9 +128,33 @@ def prompt_api_key():
     return True
 
 
+def _validate_model_pricing(config):
+    """Validate that the selected model has valid pricing configured."""
+    model = config["model"]
+    pricing = config["model_pricing"].get(model)
+
+    if pricing is None:
+        raise ValueError(
+            f"Model '{model}' not found in model_pricing.\n"
+            f'Add it to config.toml: "{model}" = [input_cost, output_cost]'
+        )
+
+    if len(pricing) != 2:
+        raise ValueError(
+            f"Model '{model}' has invalid pricing: {pricing}\n"
+            f"Pricing must be [input_cost, output_cost] per million tokens."
+        )
+
+    if not all(isinstance(p, (int, float)) for p in pricing):
+        raise ValueError(
+            f"Model '{model}' pricing values must be numbers, got: {pricing}"
+        )
+
+
 def _init():
     """Initialize config."""
     config = _load_config()
+    _validate_model_pricing(config)
     return config
 
 
