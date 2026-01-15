@@ -28,25 +28,7 @@ def check_config():
 
 
 def stream_completion(conversation: list, session) -> tuple[str, list[dict], dict | None]:
-    headers = {
-        "Authorization": f"Bearer {config.API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    payload = {
-        "model": MODEL,
-        "messages": conversation,
-        "tools": get_tools_schema(),
-        "stream": True,
-        "stream_options": {"include_usage": True}
-    }
-
-    tool_calls_by_index = {}
-    current_text = ""
-    call_usage = None
-    reasoning_details = None
-    at_line_start = True
-    had_reasoning = False
+    headers, payload = _prepare_request_data(conversation)
 
     try:
         response = requests.post(OPENROUTER_URL, headers=headers, json=payload, stream=True, timeout=60)
@@ -55,87 +37,62 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
         return "", [], None
 
     with response:
-        response.encoding = 'utf-8'  # Force UTF-8 (API returns UTF-8 but may not declare charset)
+        response.encoding = 'utf-8'
         if response.status_code != 200:
-            error_msg = f"API Error {response.status_code}"
-            try:
-                error_data = response.json()
-                if "error" in error_data:
-                    error_msg += f": {error_data['error'].get('message', error_data['error'])}"
-            except Exception:
-                error_msg += f": {response.text[:200]}"
-
-            printer.error(error_msg)
+            _handle_api_error(response)
             return "", [], None
 
-        buffer = ""
-        for chunk in response.iter_content(chunk_size=1024, decode_unicode=True):
-            buffer += chunk
+        # State for aggregation
+        tool_calls_by_index = {}
+        current_text = ""
+        call_usage = None
+        reasoning_details = None
+        
+        # State for display
+        at_line_start = True
+        had_reasoning = False
 
-            while True:
-                line_end = buffer.find('\n')
-                if line_end == -1:
-                    break
+        for data_obj in _iter_sse_stream(response):
+            if "usage" in data_obj:
+                call_usage = data_obj["usage"]
 
-                line = buffer[:line_end].strip()
-                buffer = buffer[line_end + 1:]
+            if not data_obj.get("choices"):
+                continue
 
-                if not line.startswith('data: '):
-                    continue
+            choice = data_obj["choices"][0]
+            delta = choice.get("delta", {})
 
-                data = line[6:]
-                if data == '[DONE]':
-                    break
+            # 1. Update Reasoning Details (DeepSeek/Generic)
+            if "reasoning_details" in choice.get("message", {}):
+                reasoning_details = choice["message"]["reasoning_details"]
+            elif "reasoning_details" in delta:
+                reasoning_details = delta["reasoning_details"]
 
-                try:
-                    data_obj = json.loads(data)
+            # 2. Stream Reasoning Content
+            reasoning = delta.get("reasoning") or delta.get("reasoning_content")
+            if reasoning and SHOW_REASONING:
+                printer.stream_reasoning(reasoning)
+                at_line_start = reasoning.endswith('\n')
+                had_reasoning = True
 
-                    if "usage" in data_obj:
-                        call_usage = data_obj["usage"]
+            # 3. Stream Main Content
+            content = delta.get("content")
+            if content:
+                if had_reasoning:
+                    if not at_line_start:
+                        print(printer.COLORS['reset'], end='', flush=True)
+                        printer.newline()
+                    had_reasoning = False
+                
+                printer.stream_content(content)
+                current_text += content
+                at_line_start = content.endswith('\n')
 
-                    if not data_obj.get("choices"):
-                        continue
+            # 4. Accumulate Tool Calls
+            if "tool_calls" in delta:
+                _process_tool_calls(delta["tool_calls"], tool_calls_by_index)
 
-                    delta = data_obj["choices"][0].get("delta", {})
-
-                    if "reasoning_details" in data_obj["choices"][0].get("message", {}):
-                        reasoning_details = data_obj["choices"][0]["message"]["reasoning_details"]
-                    if "reasoning_details" in delta:
-                        reasoning_details = delta["reasoning_details"]
-
-                    reasoning = delta.get("reasoning") or delta.get("reasoning_content")
-                    if reasoning and SHOW_REASONING:
-                        printer.stream_reasoning(reasoning)
-                        at_line_start = reasoning.endswith('\n')
-                        had_reasoning = True
-
-                    content = delta.get("content")
-                    if content:
-                        if had_reasoning:
-                            if not at_line_start:
-                                print(printer.COLORS['reset'], end='', flush=True)
-                                printer.newline()
-                            had_reasoning = False
-                        printer.stream_content(content)
-                        current_text += content
-                        at_line_start = content.endswith('\n')
-
-                    if "tool_calls" in delta:
-                        for tc in delta["tool_calls"]:
-                            idx = tc["index"]
-                            if idx not in tool_calls_by_index:
-                                tool_calls_by_index[idx] = {
-                                    "id": tc.get("id") or f"call_{uuid.uuid4().hex[:8]}",
-                                    "name": tc.get("function", {}).get("name", ""),
-                                    "arguments": ""
-                                }
-
-                            if "function" in tc and "arguments" in tc["function"]:
-                                tool_calls_by_index[idx]["arguments"] += tc["function"]["arguments"]
-
-                except json.JSONDecodeError as e:
-                    printer.debug(f"JSON decode error: {e} in: {data[:100]}")
-
+    # Final cleanup
     if not at_line_start:
         print(printer.COLORS['reset'], end='', flush=True)
         printer.newline()
@@ -143,8 +100,75 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
     if call_usage:
         _print_usage(call_usage, session)
 
-    tool_calls = list(tool_calls_by_index.values())
-    return current_text, tool_calls, reasoning_details
+    return current_text, list(tool_calls_by_index.values()), reasoning_details
+
+
+def _prepare_request_data(conversation: list) -> tuple[dict, dict]:
+    headers = {
+        "Authorization": f"Bearer {config.API_KEY}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": MODEL,
+        "messages": conversation,
+        "tools": get_tools_schema(),
+        "stream": True,
+        "stream_options": {"include_usage": True}
+    }
+    return headers, payload
+
+
+def _handle_api_error(response):
+    error_msg = f"API Error {response.status_code}"
+    try:
+        error_data = response.json()
+        if "error" in error_data:
+            error_msg += f": {error_data['error'].get('message', error_data['error'])}"
+    except Exception:
+        error_msg += f": {response.text[:200]}"
+    printer.error(error_msg)
+
+
+def _iter_sse_stream(response):
+    """Yields parsed JSON objects from an SSE stream."""
+    buffer = ""
+    for chunk in response.iter_content(chunk_size=1024, decode_unicode=True):
+        buffer += chunk
+        
+        while True:
+            line_end = buffer.find('\n')
+            if line_end == -1:
+                break
+
+            line = buffer[:line_end].strip()
+            buffer = buffer[line_end + 1:]
+
+            if not line.startswith('data: '):
+                continue
+
+            data = line[6:]
+            if data == '[DONE]':
+                return
+
+            try:
+                yield json.loads(data)
+            except json.JSONDecodeError as e:
+                printer.debug(f"JSON decode error: {e} in: {data[:100]}")
+                continue
+
+
+def _process_tool_calls(tool_calls_list, tool_calls_by_index):
+    for tc in tool_calls_list:
+        idx = tc["index"]
+        if idx not in tool_calls_by_index:
+            tool_calls_by_index[idx] = {
+                "id": tc.get("id") or f"call_{uuid.uuid4().hex[:8]}",
+                "name": tc.get("function", {}).get("name", ""),
+                "arguments": ""
+            }
+
+        if "function" in tc and "arguments" in tc["function"]:
+            tool_calls_by_index[idx]["arguments"] += tc["function"]["arguments"]
 
 
 def _print_usage(call_usage: dict, session):
