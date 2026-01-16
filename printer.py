@@ -111,6 +111,15 @@ def fetch_stats(method: str, raw: int, processed: int):
     print(f"{c('tool', f'[{method}]')} {c('tool', f'{raw:,} -> {processed:,} chars ({reduction:.0f}% reduction)')}")
 
 
+def fetch_preview(text: str):
+    """Print preview of first 5 lines (60 chars each)."""
+    lines = [l for l in text.splitlines() if l.strip()][:5]
+    if lines:
+        print(f"  {c('tool', '[first 5 lines]')}")
+        for line in lines:
+            print(f"  {c('tool', line[:60])}")
+
+
 def fetch_browser_start():
     """Print browser launch message."""
     print(f"{c('tool', '[browser]')} {c('tool', 'launching...')}", end="", flush=True)

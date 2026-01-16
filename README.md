@@ -10,8 +10,8 @@
 <p>if you need to paste multiple lines, enter <code>---</code> on its own line to begin multi-line input; end with  <code>---</code> on its own line.</p>
 <p>ctrl-c kills the program.</p>
 <p>edit config.toml to switch models, toggle reasoning output, etc.</p>
-without reasoning:
+example screenshot with reasoning hidden:
 <img src="./imgs/screen3.png" width="800px">
 <br>
-reasoning:
+with reasoning:
 <img src="./imgs/screen4.png" width="800px">

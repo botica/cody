@@ -23,7 +23,7 @@ DEFAULTS = {
     "file_size_limit": 10_000_000,
     "system_prompt": """You are an AI agent named Cody. You assist the user with general tasks, coding tasks, and have tools available for usage.
 
-Use your knowledge for basic facts. Only search for current events, real-time data, or things you don't know. When you DO use web_search, it only returns titles and snippets - you MUST fetch_webpage on at least one result to get actual content.
+Use your knowledge for basic facts. Only search for current events, real-time data, or things you don't know. When you use web_search, it only returns titles and snippets - ALWAYS fetch_webpage immediately after searching. Do not run multiple searches in a row without fetching. If a fetch fails or returns under 200 chars, try another URL until you get useful content.
 
 Environment:
 - Working directory: {cwd}

@@ -13,12 +13,13 @@ from urllib.parse import urlparse
 import trafilatura
 from ddgs import DDGS
 from playwright.sync_api import sync_playwright
+
 import printer
 import config
 
 CONFIRM_TOOLS = config.CONFIRM_TOOLS
 
-
+#helpers
 def confirm_action(name: str, args: dict, session) -> bool:
     if session.yolo or session.auto_confirm_turn:
         return True
@@ -83,7 +84,7 @@ def _resolve_in_workspace(session, user_path: str) -> str:
 
     return str(resolved)
 
-
+#begin tool functions
 def read_file(path: str, offset=None, limit=None, session=None) -> str:
     try:
         full_path = _resolve_in_workspace(session, path)
@@ -265,6 +266,7 @@ def fetch_webpage(url: str, use_browser: bool = False, session=None) -> str:
         raw_len = len(resp.text)
         text = extract(resp.text)
         printer.fetch_stats("trafilatura", raw_len, len(text))
+        printer.fetch_preview(text)
         return text
 
     def with_browser():
@@ -279,6 +281,7 @@ def fetch_webpage(url: str, use_browser: bool = False, session=None) -> str:
         raw_len = len(html)
         text = extract(html)
         printer.fetch_stats("trafilatura", raw_len, len(text))
+        printer.fetch_preview(text)
         return text
 
     url, err = validate_url(url)
@@ -290,7 +293,7 @@ def fetch_webpage(url: str, use_browser: bool = False, session=None) -> str:
         try:
             return process(with_requests())
         except Exception as e:
-            print(f"{e}, trying browser...")
+            print(printer.c('tool', f"{e}, trying browser..."))
             return process(with_browser())
     except Exception as e:
         return f"Error: {e}"
@@ -304,7 +307,7 @@ def web_search(query: str, backend: str = "auto", session=None) -> str:
             for r in ddgs.text(query, backend=backend, max_results=5):
                 title = r.get('title', '')
                 printer.search_result(title, r.get('href', ''))
-                results.append(f"- {title}\n  {r.get('href', '')}\n  {r.get('body', '')}")
+                results.append(f"- {title}\n  {r.get('href', '')}")
         return "\n\n".join(results) if results else "No results found"
     except Exception as e:
         return f"Error: {e}"
@@ -394,7 +397,7 @@ SCHEMAS = [
         },
         "required": ["pattern", "path"]
     }},
-    {"name": "fetch_webpage", "description": "Fetch webpage text content", "parameters": {
+    {"name": "fetch_webpage", "description": "Fetch webpage text content. Extracts the main text and metadata, removing HTML tags, navigation, scripts, and styling (via trafilatura).", "parameters": {
         "type": "object",
         "properties": {
             "url": {"type": "string", "description": "URL to fetch"},

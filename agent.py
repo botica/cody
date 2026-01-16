@@ -128,7 +128,7 @@ def main():
 
     cwd = os.path.abspath(args.cwd)
     if not os.path.isdir(cwd):
-        print(f"Error: {cwd} is not a directory")
+        printer.error(f"{cwd} is not a directory")
         sys.exit(1)
 
     if not check_config():
