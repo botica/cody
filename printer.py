@@ -93,9 +93,11 @@ def item(text: str):
     print(f"  {c('tool', text)}")
 
 
-def search_result(title: str):
-    """Print a search result title."""
+def search_result(title: str, url: str = ""):
+    """Print a search result title and URL."""
     print(f"  {c('tool', f'- {title}')}")
+    if url:
+        print(f"  {c('tool', f'  {url}')}")
 
 
 def search_query(backend: str, query: str):
