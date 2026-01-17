@@ -112,10 +112,10 @@ def fetch_stats(method: str, raw: int, processed: int):
 
 
 def fetch_preview(text: str):
-    """Print preview of first 5 lines (60 chars each)."""
-    lines = [l for l in text.splitlines() if l.strip()][:5]
+    """Print preview of first 10 lines (60 chars each)."""
+    lines = [l for l in text.splitlines() if l.strip()][:10]
     if lines:
-        print(f"  {c('tool', '[first 5 lines]')}")
+        print(f"  {c('tool', '[first 10 lines]')}")
         for line in lines:
             print(f"  {c('tool', line[:60])}")
 
@@ -176,8 +176,8 @@ def usage(call_in: int, call_out: int, call_cost: float | None,
 
 def config_error():
     """Print API key configuration error."""
-    print(c('tool', "Error: OPENROUTER_API_KEY not set"))
-    print(c('tool', "Create a .env file with:"))
+    print(c('tool', "error: OPENROUTER_API_KEY not set"))
+    print(c('tool', "create a .env file with:"))
     print(c('tool', "  OPENROUTER_API_KEY=your_key_here"))
 
 
@@ -188,7 +188,7 @@ def banner(name: str, model: str):
 
 def confirm(name: str, detail: str):
     """Print confirmation prompt."""
-    print(f"\n{c('confirm', f'Confirm {name} {detail}? [y/n/!]')} ", end="", flush=True)
+    print(f"\n{c('confirm', f'confirm {name} {detail}? [y/n/!]')} ", end="", flush=True)
 
 
 def user_input(text: str, extra_lines: int = 0, prompt_len: int = 2):

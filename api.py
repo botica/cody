@@ -33,7 +33,7 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
     try:
         response = requests.post(OPENROUTER_URL, headers=headers, json=payload, stream=True, timeout=60)
     except requests.exceptions.RequestException as e:
-        printer.error(f"Connection failed: {e}")
+        printer.error(f"connection failed: {e}")
         return "", [], None
 
     with response:

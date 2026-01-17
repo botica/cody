@@ -9,7 +9,7 @@ DEFAULTS = {
     "api_key": "",
     "model": "google/gemini-3-pro-preview",
     "model_pricing": {
-        "google/gemini-3-flash-preview": (0.50, 3.00),
+        "google/gemini-3-pro-preview": (0.50, 3.00),
         "minimax/minimax-m2.1": (0.30, 1.20),
         "x-ai/grok-code-fast-1": (0.20, 1.50),
         "z-ai/glm-4.7": (0.40, 1.50),
@@ -17,7 +17,7 @@ DEFAULTS = {
         "openai/gpt-5.2": (1.75, 14.00),
         "google/gemini-3-pro-preview": (2.00, 12.00),
     },
-    "max_turn_cost": 0.50,
+    "max_turn_cost": 0.20,
     "show_reasoning": True,
     "confirm_tools": {"write_file", "edit_file", "delete_file", "fetch_webpage", "web_search", "run_bash"},
     "file_size_limit": 10_000_000,
@@ -114,17 +114,17 @@ system_prompt = \'\'\'
 def prompt_api_key():
     """Prompt user for API key and save config."""
     global _config
-    print("No API key found.")
-    print("Get one at: https://openrouter.ai/keys\n")
+    print("no API key found.")
+    print("get one at: https://openrouter.ai/keys\n")
 
-    api_key = input("Enter your OpenRouter API key: ").strip()
+    api_key = input("enter your OpenRouter API key: ").strip()
     if not api_key:
         return False
 
     _config = _load_config()
     _config["api_key"] = api_key
     _save_config(_config)
-    print(f"Saved to {CONFIG_PATH}\n")
+    print(f"saved to {CONFIG_PATH}\n")
     return True
 
 
@@ -135,19 +135,19 @@ def _validate_model_pricing(config):
 
     if pricing is None:
         raise ValueError(
-            f"Model '{model}' not found in model_pricing.\n"
-            f'Add it to config.toml: "{model}" = [input_cost, output_cost]'
+            f"model '{model}' not found in model_pricing.\n"
+            f'add it to config.toml: "{model}" = [input_cost, output_cost]'
         )
 
     if len(pricing) != 2:
         raise ValueError(
-            f"Model '{model}' has invalid pricing: {pricing}\n"
-            f"Pricing must be [input_cost, output_cost] per million tokens."
+            f"model '{model}' has invalid pricing: {pricing}\n"
+            f"pricing must be [input_cost, output_cost] per million tokens."
         )
 
     if not all(isinstance(p, (int, float)) for p in pricing):
         raise ValueError(
-            f"Model '{model}' pricing values must be numbers, got: {pricing}"
+            f"model '{model}' pricing values must be numbers, got: {pricing}"
         )
 
 

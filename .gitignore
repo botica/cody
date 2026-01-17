@@ -1,20 +1,12 @@
 # Local config / secrets (do not commit)
 openrouter-key
+TODO
 nul
 .claude/
-.cody/
 .env
-config.json
+config.toml
 
 # Python
 __pycache__/
 *.py[cod]
 *.egg-info/
-
-# IDE
-.vscode/
-.idea/
-
-# Scripts / local helpers
-run-cody.ps1
-tests.py 

@@ -91,7 +91,7 @@ def run(prompt: str, session: Session) -> None:
                 session.conversation.append({
                     "role": "tool",
                     "tool_call_id": tc["id"],
-                    "content": f"Error: Invalid JSON arguments: {e}"
+                    "content": f"error: invalid JSON arguments: {e}"
                 })
                 continue
 
