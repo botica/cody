@@ -5,6 +5,7 @@
 <p>cody has these tools: read_file, list_directory, write_file, edit_file, delete_file, search, fetch_webpage, web_search, and run_bash.</p>
 <p>run as <code>python agent.py</code> after installing the dependencies in requirements.txt as well as <a href="https://github.com/BurntSushi/ripgrep">ripgrep</a> (for search)</p>
 <p>enter <code>'!'</code> instead of <code>y/n</code> to auto-confirm tools for the turn.</p>
+<p>enter <code>b</code> at the confirm to break out back to user inp</p>
 <p>run with <code>--yolo</code> flag to auto confirm for session</p>
 <p><code>/clear</code> deletes all context and token counts</p>
 <p>if you need to paste multiple lines, enter <code>---</code> on its own line to begin multi-line input; end with  <code>---</code> on its own line.</p>
