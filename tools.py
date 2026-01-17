@@ -20,7 +20,8 @@ import config
 CONFIRM_TOOLS = config.CONFIRM_TOOLS
 
 #helpers
-def confirm_action(name: str, args: dict, session) -> bool:
+def confirm_action(name: str, args: dict, session) -> bool | str:
+    """Returns True to proceed, False to deny, or a string with user's custom response."""
     if session.yolo or session.auto_confirm_turn:
         return True
 
@@ -35,19 +36,35 @@ def confirm_action(name: str, args: dict, session) -> bool:
 
     printer.confirm(name, detail)
     try:
-        response = input().strip().lower()
-        if response == "!":
+        response = input().strip()
+        lower = response.lower()
+        if lower == "!":
             session.auto_confirm_turn = True
             return True
-        return response in ("y", "yes")
+        if lower in ("y", "yes"):
+            return True
+        if lower in ("n", "no"):
+            return False
+        if lower == "b":
+            print(printer.c('blue', '> '), end='', flush=True)
+            user_input = input().strip()
+            if user_input:
+                printer.user_input(user_input)
+                return user_input
+            return False
+        return False
     except (KeyboardInterrupt, EOFError):
         print()
         sys.exit(0)
 
 
 def execute_tool(name: str, args: dict, session) -> str:
-    if name in CONFIRM_TOOLS and not confirm_action(name, args, session):
-        return "tool call denied."
+    if name in CONFIRM_TOOLS:
+        confirm_result = confirm_action(name, args, session)
+        if confirm_result is False:
+            return "tool call denied."
+        if isinstance(confirm_result, str):
+            return f"tool call denied. user response: {confirm_result}"
 
     handler = HANDLERS.get(name)
     if not handler:

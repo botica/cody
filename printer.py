@@ -46,7 +46,8 @@ def tool_call(name: str, args: dict | str = None):
                     ctx_before = lines[start_line - 2]
                 if end_line < len(lines):
                     ctx_after = lines[end_line]
-        except:
+        except Exception as e:
+            print(c('blue', f'[edit_file] failed to read {path}: {e}'))
             old_lines, new_lines = old_string, new_string
         edit_diff(path, old_lines or old_string, new_lines or new_string,
                   start_line=start_line, ctx_before=ctx_before, ctx_after=ctx_after,
@@ -264,7 +265,7 @@ def banner(name: str, model: str):
 
 def confirm(name: str, detail: str):
     """Print confirmation prompt."""
-    print(f"\n{c('blue', f'confirm {name} {detail}? [y/n/!]')} ", end="", flush=True)
+    print(f"\n{c('blue', f'confirm {name} {detail}? [y/n/!/b]')} ", end="", flush=True)
 
 
 def user_input(text: str, extra_lines: int = 0, prompt_len: int = 2):
