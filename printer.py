@@ -3,18 +3,10 @@
 # ANSI 256-color codes
 COLORS = {
     "reset": "\033[0m",
-    "tool": "\033[38;5;75m",       # blue - tool names
-    "arg": "\033[38;5;174m",       # soft dark pink - arguments, file items
-    "info": "\033[38;5;42m",       # emerald - secondary info
-    "bash": "\033[38;5;206m",      # hot pink - bash output
-    "added": "\033[38;5;183m",     # light lavender - new/added
-    "removed": "\033[48;5;233m\033[38;5;23m",  # dark grey bg, teal text - old/removed
-    "reasoning": "\033[48;5;233m\033[38;5;23m", # super dark grey bg, teal text - reasoning
-    "content": "\033[38;5;183m",   # light lavender - main output
-    "banner": "\033[38;5;183m",    # light lavender - startup/prompt
-    "stats": "\033[38;5;23m",      # teal - token stats
-    "confirm": "\033[38;5;75m",    # blue - confirm prompts
-    "user_input": "\033[48;5;23m\033[38;5;255m",  # dark teal bg, white text - user input
+    "blue": "\033[38;5;75m",
+    "lavender": "\033[38;5;183m",
+    "dim": "\033[48;5;233m\033[38;5;23m",  # dark grey bg, teal text
+    "highlight": "\033[48;5;23m\033[38;5;255m",  # teal bg, white text
 }
 
 def c(color: str, text: str) -> str:
@@ -30,21 +22,21 @@ def tool_call(name: str, args: dict | str = None):
         edit_diff(args.get('path', ''), args.get('old_string', ''), args.get('new_string', ''))
     elif isinstance(args, dict) and args:
         args_str = " ".join(f"{k}={str(v)[:60]}" for k, v in args.items())
-        print(f"{c('tool', f'[{name}]')} {c('tool', args_str)}")
+        print(f"{c('blue', f'[{name}]')} {c('blue', args_str)}")
     elif isinstance(args, str) and args:
-        print(f"{c('tool', f'[{name}]')} {c('tool', args)}")
+        print(f"{c('blue', f'[{name}]')} {c('blue', args)}")
     else:
-        print(f"{c('tool', f'[{name}]')}")
+        print(f"{c('blue', f'[{name}]')}")
 
 
 def tool_path(name: str, path: str):
     """Print a tool call with a path."""
-    print(f"{c('tool', f'[{name}]')} {c('tool', path)}")
+    print(f"{c('blue', f'[{name}]')} {c('blue', path)}")
 
 
 def edit_diff(path: str, old: str, new: str, max_lines: int = 4):
     """Print an edit_file diff preview."""
-    print(f"{c('tool', '[edit_file]')} {c('tool', path)}")
+    print(f"{c('blue', '[edit_file]')} {c('blue', path)}")
 
     def show_lines(text: str, prefix: str, color: str):
         lines = text.splitlines() if text else []
@@ -61,96 +53,96 @@ def edit_diff(path: str, old: str, new: str, max_lines: int = 4):
 
         remaining = total - len(preview_lines)
         if remaining > 0:
-            print(f"  {c('tool', f'  ... +{remaining} more lines')}")
+            print(f"  {c('blue', f'  ... +{remaining} more lines')}")
 
     if old:
-        show_lines(old, '-', 'removed')
-    show_lines(new, '+', 'added')
+        show_lines(old, '-', 'dim')
+    show_lines(new, '+', 'lavender')
 
 
 def write_preview(path: str, content: str):
     """Print a write_file preview."""
     all_lines = content.splitlines()
     lines = all_lines[:10]
-    preview = '\n'.join(f"  {c('tool', line[:100])}" for line in lines)
+    preview = '\n'.join(f"  {c('blue', line[:100])}" for line in lines)
     if len(all_lines) > 10:
-        preview += f"\n  {c('tool', f'... ({len(all_lines)} lines total)')}"
-    print(f"{c('tool', '[write_file]')} {c('tool', path)}\n{preview}")
+        preview += f"\n  {c('blue', f'... ({len(all_lines)} lines total)')}"
+    print(f"{c('blue', '[write_file]')} {c('blue', path)}\n{preview}")
 
 
 def reasoning(count: int):
     """Print reasoning block capture notice."""
-    print(c('reasoning', f'[reasoning] captured {count} blocks'))
+    print(c('dim', f'[reasoning] captured {count} blocks'))
 
 
 def limit_warning(cost: float):
     """Print turn cost limit warning."""
-    print(c('tool', f"\n[limit] Turn exceeded ${cost:.2f}, cancelling"))
+    print(c('blue', f"\n[limit] Turn exceeded ${cost:.2f}, cancelling"))
 
 
 def item(text: str):
     """Print a list item (like directory entries)."""
-    print(f"  {c('tool', text)}")
+    print(f"  {c('blue', text)}")
 
 
 def search_result(title: str, url: str = ""):
     """Print a search result title and URL."""
-    print(f"  {c('tool', f'- {title}')}")
+    print(f"  {c('blue', f'- {title}')}")
     if url:
-        print(f"  {c('tool', f'  {url}')}")
+        print(f"  {c('blue', f'  {url}')}")
 
 
 def search_query(backend: str, query: str):
     """Print search query info."""
-    print(f"{c('tool', f'[search:{backend}]')} {c('tool', repr(query))}")
+    print(f"{c('blue', f'[search:{backend}]')} {c('blue', repr(query))}")
 
 
 def fetch_stats(method: str, raw: int, processed: int):
     """Print fetch/extraction stats."""
     reduction = 100 - processed / raw * 100 if raw > 0 else 0
-    print(f"{c('tool', f'[{method}]')} {c('tool', f'{raw:,} -> {processed:,} chars ({reduction:.0f}% reduction)')}")
+    print(f"{c('blue', f'[{method}]')} {c('blue', f'{raw:,} -> {processed:,} chars ({reduction:.0f}% reduction)')}")
 
 
 def fetch_preview(text: str):
     """Print preview of first 10 lines (60 chars each)."""
     lines = [l for l in text.splitlines() if l.strip()][:10]
     if lines:
-        print(f"  {c('tool', '[first 10 lines]')}")
+        print(f"  {c('blue', '[first 10 lines]')}")
         for line in lines:
-            print(f"  {c('tool', line[:60])}")
+            print(f"  {c('blue', line[:60])}")
 
 
 def fetch_browser_start():
     """Print browser launch message."""
-    print(f"{c('tool', '[browser]')} {c('tool', 'launching...')}", end="", flush=True)
+    print(f"{c('blue', '[browser]')} {c('blue', 'launching...')}", end="", flush=True)
 
 
 def fetch_browser_done():
     """Print browser done message."""
-    print(c('tool', " done"))
+    print(c('blue', " done"))
 
 
 # --- API / streaming ---
 
 def error(msg: str):
     """Print an error message."""
-    print(c('tool', f"[error] {msg}"))
+    print(c('blue', f"[error] {msg}"))
 
 
 def debug(msg: str):
     """Print a debug message."""
-    print(c('tool', f"[debug] {msg}"))
+    print(c('blue', f"[debug] {msg}"))
 
 
 def stream_reasoning(text: str):
     """Print streaming reasoning content."""
     # \033[K clears from cursor to end of line, preventing bg color bleed
-    print(f"{COLORS['reasoning']}{text}{COLORS['reset']}\033[K", end="", flush=True)
+    print(f"{COLORS['dim']}{text}{COLORS['reset']}\033[K", end="", flush=True)
 
 
 def stream_content(text: str):
     """Print streaming content."""
-    print(f"{COLORS['content']}{text}{COLORS['reset']}", end="", flush=True)
+    print(f"{COLORS['lavender']}{text}{COLORS['reset']}", end="", flush=True)
 
 
 def newline():
@@ -160,7 +152,7 @@ def newline():
 
 def separator():
     """Print a separator between user input and response."""
-    print(c('banner', "-----"))
+    print(c('lavender', "-----"))
 
 
 def usage(call_in: int, call_out: int, call_cost: float | None,
@@ -171,24 +163,24 @@ def usage(call_in: int, call_out: int, call_cost: float | None,
         msg = f"[tokens] call: {call_in:,}i/{call_out:,}o ${call_cost:.4f}|turn: {turn_in:,}i/{turn_out:,}o ${turn_cost:.4f}|session: {sess_in:,}i/{sess_out:,}o ${sess_cost:.4f}"
     else:
         msg = f"[tokens] call: {call_in:,}i/{call_out:,}o|turn: {turn_in:,}i/{turn_out:,}o|session: {sess_in:,}i/{sess_out:,}o"
-    print(c('tool', msg))
+    print(c('blue', msg))
 
 
 def config_error():
     """Print API key configuration error."""
-    print(c('tool', "error: OPENROUTER_API_KEY not set"))
-    print(c('tool', "create a .env file with:"))
-    print(c('tool', "  OPENROUTER_API_KEY=your_key_here"))
+    print(c('blue', "error: OPENROUTER_API_KEY not set"))
+    print(c('blue', "create a .env file with:"))
+    print(c('blue', "  OPENROUTER_API_KEY=your_key_here"))
 
 
 def banner(name: str, model: str):
     """Print startup banner."""
-    print(f"{COLORS.get('banner', '')}{name} [{model}]{COLORS['reset']}")
+    print(f"{COLORS.get('lavender', '')}{name} [{model}]{COLORS['reset']}")
 
 
 def confirm(name: str, detail: str):
     """Print confirmation prompt."""
-    print(f"\n{c('confirm', f'confirm {name} {detail}? [y/n/!]')} ", end="", flush=True)
+    print(f"\n{c('blue', f'confirm {name} {detail}? [y/n/!]')} ", end="", flush=True)
 
 
 def user_input(text: str, extra_lines: int = 0, prompt_len: int = 2):
@@ -216,4 +208,4 @@ def user_input(text: str, extra_lines: int = 0, prompt_len: int = 2):
         print("\033[1A\033[2K", end="", flush=True)
     # Print highlighted lines
     for line in lines:
-        print(c('user_input', f' {line} '), flush=True)
+        print(c('highlight', f' {line} '), flush=True)

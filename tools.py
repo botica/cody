@@ -246,7 +246,7 @@ def fetch_webpage(url: str, use_browser: bool = False, session=None) -> str:
 
     def process(text):
         lines = [l.strip() for l in text.splitlines() if l.strip()]
-        print(printer.c('tool', f"{len(lines)} lines, {len(text)} chars"))
+        print(printer.c('blue', f"{len(lines)} lines, {len(text)} chars"))
         return "\n".join(lines)
 
     def extract(html: str) -> str:
@@ -293,7 +293,7 @@ def fetch_webpage(url: str, use_browser: bool = False, session=None) -> str:
         try:
             return process(with_requests())
         except Exception as e:
-            print(printer.c('tool', f"{e}, trying browser..."))
+            print(printer.c('blue', f"{e}, trying browser..."))
             return process(with_browser())
     except Exception as e:
         return f"error: {e}"
@@ -323,7 +323,7 @@ def run_bash(command: str, session=None) -> str:
         )
         lines = []
         for line in proc.stdout:
-            print(printer.c('tool', line.rstrip()))
+            print(printer.c('blue', line.rstrip()))
             lines.append(line)
         try:
             exit_code = proc.wait(timeout=300)  # 5 min timeout

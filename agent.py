@@ -105,7 +105,7 @@ def run(prompt: str, session: Session) -> None:
 
 
 def get_input():
-    line = input(printer.c('banner', '> '))
+    line = input(printer.c('lavender', '> '))
 
     # Multiline mode: type --- and press enter, then paste content, then --- to finish
     if line.strip() == "---":
