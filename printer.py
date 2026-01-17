@@ -1,5 +1,7 @@
 """Print formatting and colors for cody"""
 
+SNIPPET_LEN = 80
+
 # ANSI 256-color codes
 COLORS = {
     "reset": "\033[0m",
@@ -7,6 +9,8 @@ COLORS = {
     "lavender": "\033[38;5;183m",
     "dim": "\033[48;5;233m\033[38;5;23m",  # dark grey bg, teal text
     "highlight": "\033[48;5;23m\033[38;5;255m",  # teal bg, white text
+    "del": "\033[38;5;23m",  # teal text, no bg
+    "add": "\033[48;5;234m\033[38;5;183m",  # slightly lighter grey bg, lavender text
 }
 
 def c(color: str, text: str) -> str:
@@ -19,9 +23,36 @@ def tool_call(name: str, args: dict | str = None):
     if name == 'write_file' and isinstance(args, dict) and 'content' in args:
         write_preview(args.get('path', ''), args['content'])
     elif name == 'edit_file' and isinstance(args, dict):
-        edit_diff(args.get('path', ''), args.get('old_string', ''), args.get('new_string', ''))
+        path = args.get('path', '')
+        old_string = args.get('old_string', '')
+        new_string = args.get('new_string', '')
+        # Find full lines containing the edit and context
+        start_line = None
+        ctx_before = ctx_after = None
+        old_lines = new_lines = None
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            idx = content.find(old_string)
+            if idx >= 0:
+                start_line = content[:idx].count('\n') + 1
+                end_line = start_line + old_string.count('\n')
+                lines = content.splitlines()
+                # Get full lines containing the edit
+                old_lines = '\n'.join(lines[start_line - 1:end_line])
+                new_lines = old_lines.replace(old_string, new_string, 1)
+                # Context
+                if start_line > 1:
+                    ctx_before = lines[start_line - 2]
+                if end_line < len(lines):
+                    ctx_after = lines[end_line]
+        except:
+            old_lines, new_lines = old_string, new_string
+        edit_diff(path, old_lines or old_string, new_lines or new_string,
+                  start_line=start_line, ctx_before=ctx_before, ctx_after=ctx_after,
+                  old_fragment=old_string, new_fragment=new_string)
     elif isinstance(args, dict) and args:
-        args_str = " ".join(f"{k}={str(v)[:60]}" for k, v in args.items())
+        args_str = " ".join(f"{k}={str(v)[:SNIPPET_LEN]}" for k, v in args.items())
         print(f"{c('blue', f'[{name}]')} {c('blue', args_str)}")
     elif isinstance(args, str) and args:
         print(f"{c('blue', f'[{name}]')} {c('blue', args)}")
@@ -34,37 +65,90 @@ def tool_path(name: str, path: str):
     print(f"{c('blue', f'[{name}]')} {c('blue', path)}")
 
 
-def edit_diff(path: str, old: str, new: str, max_lines: int = 4):
-    """Print an edit_file diff preview."""
-    print(f"{c('blue', '[edit_file]')} {c('blue', path)}")
+def edit_diff(path: str, old: str, new: str, max_lines: int = 5, start_line: int = None,
+              ctx_before: str = None, ctx_after: str = None,
+              old_fragment: str = None, new_fragment: str = None):
+    """Print an edit_file diff preview with context and highlighted changes."""
+    line_info = f":{start_line}" if start_line else ""
+    print(f"{c('blue', '[edit_file]')} {c('blue', f'{path}{line_info}')}")
 
-    def show_lines(text: str, prefix: str, color: str):
+    def show_ctx(line_num: int, text: str):
+        if text is not None:
+            print(f"  {c('blue', f'{line_num:4}   {text[:SNIPPET_LEN]}')}")
+
+    def highlight_line(line: str, fragment: str, base_color: str, hl_color: str):
+        """Highlight fragment within line using hl_color, rest in base_color."""
+        trunc = line[:SNIPPET_LEN]
+        if not fragment:
+            return c(base_color, trunc)
+        # Check if fragment is in line
+        if fragment in line:
+            idx = line.find(fragment)
+            # If fragment starts at beginning or covers whole line, use base_color
+            if idx == 0:
+                return c(base_color, trunc)
+            # Partial match - highlight just the fragment
+            before = line[:idx]
+            after = line[idx + len(fragment):]
+            remaining = SNIPPET_LEN
+            before_t = before[:remaining]
+            remaining -= len(before_t)
+            frag_t = fragment[:remaining]
+            remaining -= len(frag_t)
+            after_t = after[:max(0, remaining)]
+            return c(base_color, before_t) + c(hl_color, frag_t) + c(base_color, after_t)
+        # Line not matching fragment, use base_color
+        return c(base_color, trunc)
+
+    def show_lines(text: str, prefix: str, base_color: str, hl_color: str, fragment: str, line_num: int = None):
         lines = text.splitlines() if text else []
-        preview_lines = [l for l in lines if l.strip()][:max_lines]
         total = len(lines)
 
-        if not preview_lines:
+        if not lines or not any(l.strip() for l in lines):
             if total > 0:
-                print(f"  {c(color, f'{prefix} ({total} empty lines)')}")
+                print(f"  {c(base_color, f'     {prefix} ({total} empty lines)')}")
             return
 
-        for line in preview_lines:
-            print(f"  {c(color, f'{prefix} {line[:80]}')}")
+        # Track which lines contain the fragment (for multiline fragments)
+        frag_lines = fragment.splitlines() if fragment else []
+        frag_idx = 0
 
-        remaining = total - len(preview_lines)
+        shown = 0
+        for i, line in enumerate(lines):
+            if shown >= max_lines:
+                break
+            ln = f"{line_num + i:4} " if line_num else "     "
+            # Find if this line has part of the fragment
+            frag_part = frag_lines[frag_idx] if frag_idx < len(frag_lines) else None
+            highlighted = highlight_line(line, frag_part, base_color, hl_color) if line else ""
+            print(f"  {c(base_color, f'{ln}{prefix} ')}{highlighted}")
+            if frag_part and frag_part in line:
+                frag_idx += 1
+            shown += 1
+
+        remaining = total - shown
         if remaining > 0:
-            print(f"  {c('blue', f'  ... +{remaining} more lines')}")
+            print(f"  {c('blue', f'     ... +{remaining} more lines')}")
+
+    # Context before
+    if ctx_before is not None and start_line:
+        show_ctx(start_line - 1, ctx_before)
 
     if old:
-        show_lines(old, '-', 'dim')
-    show_lines(new, '+', 'lavender')
+        show_lines(old, '-', 'dim', 'del', old_fragment, start_line)
+    show_lines(new, '+', 'lavender', 'add', new_fragment, start_line)
+
+    # Context after
+    if ctx_after is not None and start_line:
+        end_line = start_line + max(old.count('\n'), new.count('\n'))
+        show_ctx(end_line + 1, ctx_after)
 
 
 def write_preview(path: str, content: str):
     """Print a write_file preview."""
     all_lines = content.splitlines()
     lines = all_lines[:10]
-    preview = '\n'.join(f"  {c('blue', line[:100])}" for line in lines)
+    preview = '\n'.join(f"  {c('blue', line[:SNIPPET_LEN])}" for line in lines)
     if len(all_lines) > 10:
         preview += f"\n  {c('blue', f'... ({len(all_lines)} lines total)')}"
     print(f"{c('blue', '[write_file]')} {c('blue', path)}\n{preview}")
@@ -109,7 +193,7 @@ def fetch_preview(text: str):
     if lines:
         print(f"  {c('blue', '[first 10 lines]')}")
         for line in lines:
-            print(f"  {c('blue', line[:60])}")
+            print(f"  {c('blue', line[:SNIPPET_LEN])}")
 
 
 def fetch_browser_start():

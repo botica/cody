@@ -25,7 +25,7 @@ def confirm_action(name: str, args: dict, session) -> bool:
         return True
 
     if name == "edit_file":
-        detail = f"'{args.get('path')}' (replacing '{args.get('old_string', '')[:30]}...')"
+        detail = f"'{args.get('path')}'"
     elif name in ("fetch_webpage", "web_search"):
         detail = f"'{args.get('url') or args.get('query')}'"
     elif name == "run_bash":
@@ -154,8 +154,8 @@ def edit_file(path: str, new_string: str = "", old_string: str = "", replace_all
 
         if old_string not in content:
             lines = content.splitlines()
-            old_start = old_string.split('\n')[0][:40]
-            similar = [l.strip()[:60] for l in lines if old_start[:20].lower() in l.lower()][:3]
+            old_start = old_string.split('\n')[0][:printer.SNIPPET_LEN]
+            similar = [l.strip()[:printer.SNIPPET_LEN] for l in lines if old_start[:20].lower() in l.lower()][:3]
             hint = f" similar lines: {similar}" if similar else f" file has {len(lines)} lines."
             return f"error: old_string not found in {path}.{hint}"
 
