@@ -292,6 +292,7 @@ def fetch_webpage(url: str, use_browser: bool = False, session=None) -> str:
             browser = p.firefox.launch(headless=True)
             page = browser.new_page()
             page.goto(url, timeout=30000)
+            page.wait_for_load_state("load")
             html = page.content()
             browser.close()
         printer.fetch_browser_done()
