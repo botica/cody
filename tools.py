@@ -314,6 +314,7 @@ def fetch_webpage(url: str, use_browser: bool = False, session=None) -> str:
             print(printer.c('blue', f"{e}, trying browser..."))
             return process(with_browser())
     except Exception as e:
+        print(printer.c('blue', f" error: {e}"))
         return f"error: {e}"
 
 
