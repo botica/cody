@@ -10,11 +10,14 @@ import config
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-# Re-export config values for backwards compatibility
-MODEL = config.MODEL
-MODEL_PRICING = config.MODEL_PRICING
+# Re-export config values (use config.MODEL directly for dynamic switching)
 MAX_TURN_COST = config.MAX_TURN_COST
 SHOW_REASONING = config.SHOW_REASONING
+
+
+def get_model():
+    """Get current model (supports runtime switching)."""
+    return config.MODEL
 
 
 def check_config():
@@ -109,7 +112,7 @@ def _prepare_request_data(conversation: list) -> tuple[dict, dict]:
         "Content-Type": "application/json"
     }
     payload = {
-        "model": MODEL,
+        "model": config.MODEL,
         "messages": conversation,
         "tools": get_tools_schema(),
         "stream": True,
@@ -179,7 +182,7 @@ def _print_usage(call_usage: dict, session):
     session.turn_tokens_in += inp
     session.turn_tokens_out += out
 
-    pricing = MODEL_PRICING.get(MODEL)
+    pricing = config.MODEL_PRICING.get(config.MODEL)
     if pricing:
         call_cost = (inp * pricing[0] + out * pricing[1]) / 1_000_000
         session.token_usage["cost"] += call_cost

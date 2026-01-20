@@ -263,6 +263,16 @@ def banner(name: str, model: str):
     print(f"{COLORS.get('lavender', '')}{name} [{model}]{COLORS['reset']}")
 
 
+def model_list(models):
+    """Print list of models with pricing."""
+    print(c('blue', "Models (current model marked with '*'):"))
+    for i, (name, prices, is_current) in enumerate(models, 1):
+        inp, out = prices[0], prices[1]
+        marker = '*' if is_current else ' '
+        print(f"  {c('blue', f'{marker}{i}. {name} ${inp:.2f}/${out:.2f}')}")
+    print(c('blue', '\n  /model <n> to switch'))
+
+
 def confirm(name: str, detail: str):
     """Print confirmation prompt."""
     print(f"\n{c('blue', f'confirm {name} {detail}? [y/n/!/b]')} ", end="", flush=True)

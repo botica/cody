@@ -94,16 +94,16 @@ file_size_limit = {config["file_size_limit"]}
 # Available: "write_file", "edit_file", "delete_file", "fetch_webpage", "web_search", "run_bash", "read_file", "list_directory"
 confirm_tools = [{tools_list}]
 
+# System prompt sent to the model
+# Placeholders: {{cwd}}, {{platform}}, {{date}}
+system_prompt = \'\'\'
+{system_prompt}\'\'\'
+
 # Model pricing for cost tracking
 # Format: "provider/model-name" = [input_cost_per_million, output_cost_per_million]
 # Find pricing at https://openrouter.ai/models
 [model_pricing]
 {chr(10).join(pricing_lines)}
-
-# System prompt sent to the model
-# Placeholders: {{cwd}}, {{platform}}, {{date}}
-system_prompt = \'\'\'
-{system_prompt}\'\'\'
 '''
 
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
@@ -167,3 +167,27 @@ SHOW_REASONING = _cfg["show_reasoning"]
 CONFIRM_TOOLS = _cfg["confirm_tools"]
 FILE_SIZE_LIMIT = _cfg["file_size_limit"]
 SYSTEM_PROMPT_TEMPLATE = _cfg["system_prompt"]
+
+
+def set_model(model_name: str) -> bool:
+    """Switch to a different model at runtime. Returns True if successful."""
+    global MODEL, _cfg
+    if model_name not in MODEL_PRICING:
+        return False
+    MODEL = model_name
+    _cfg["model"] = model_name
+    _save_config(_cfg)
+    return True
+
+
+def get_models() -> list[tuple[str, tuple[float, float], bool]]:
+    """Return list of (model_name, (input_cost, output_cost), is_current)."""
+    models = []
+    for name, prices in MODEL_PRICING.items():
+        # Skip invalid entries (must be tuple/list of 2 numbers)
+        if not isinstance(prices, (tuple, list)) or len(prices) != 2:
+            continue
+        if not all(isinstance(p, (int, float)) for p in prices):
+            continue
+        models.append((name, prices, name == MODEL))
+    return models

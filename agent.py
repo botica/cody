@@ -7,7 +7,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from api import stream_completion, MODEL, check_config, MAX_TURN_COST, SHOW_REASONING
+from api import stream_completion, get_model, check_config, MAX_TURN_COST, SHOW_REASONING
 from tools import execute_tool
 import printer
 import config
@@ -104,6 +104,29 @@ def run(prompt: str, session: Session) -> None:
             })
 
 
+def handle_model_command(cmd: str):
+    """Handle /model command for listing and switching models."""
+    parts = cmd.split()
+
+    # /model - list models
+    if len(parts) == 1:
+        printer.model_list(config.get_models())
+        return
+
+    # /model <n> - switch to model by number
+    try:
+        idx = int(parts[1]) - 1
+        models = config.get_models()
+        if 0 <= idx < len(models):
+            name = models[idx][0]
+            config.set_model(name)
+            print(printer.c('blue', f'switched to {name}'))
+        else:
+            print(printer.c('blue', f'error: pick 1-{len(models)}'))
+    except ValueError:
+        print(printer.c('blue', 'usage: /model [n]'))
+
+
 def get_input():
     line = input(printer.c('lavender', '> '))
 
@@ -121,7 +144,7 @@ def get_input():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Cody terminal agent")
+    parser = argparse.ArgumentParser(description="cody terminal agent")
     parser.add_argument('--cwd', '-C', default=os.getcwd(), help='Working directory')
     parser.add_argument('--yolo', action='store_true', help='Skip all confirmations')
     args = parser.parse_args()
@@ -135,7 +158,7 @@ def main():
         sys.exit(1)
 
     session = Session(cwd=cwd, yolo=args.yolo)
-    printer.banner("Cody", MODEL)
+    printer.banner("cody", get_model())
 
     while True:
         try:
@@ -144,6 +167,10 @@ def main():
                 session.conversation = [{"role": "system", "content": get_system_prompt(session.cwd)}]
                 session.token_usage = {"input": 0, "output": 0, "cost": 0.0}
                 print("[cleared]")
+                continue
+            if prompt.strip().startswith("/model"):
+                printer.user_input(prompt)
+                handle_model_command(prompt.strip())
                 continue
             if prompt.strip():
                 printer.user_input(prompt, extra_lines=2 if multiline else 0)
