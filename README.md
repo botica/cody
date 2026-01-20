@@ -8,7 +8,7 @@
 ### commands
 - `/model` - list available models and switch (e.g. `/model 3`)
 - `/clear` - clear conversation context and token counts
-- `---` - start/end multi-line input mode
+- `---` - start/end multi-line input mode (enter on its own line)
 - `ctrl-c` - exit
 
 ### confirmations
@@ -19,7 +19,7 @@ most tools require `y/n` confirmation. special inputs:
 run with `--yolo` to skip all confirmations for the session.
 
 ### config
-edit `config.toml` to add models, set pricing, toggle reasoning output, adjust cost limits, etc.
+edit `config.toml` to add models, set pricing, toggle reasoning output, adjust cost limits, etc. models are listed on <a href="https://openrouter.ai/models">openrouter's site</a>
 
 ---
 <img src="./imgs/screen5.png" width="800px">
