@@ -18,6 +18,9 @@ most tools require `y/n` confirmation. special inputs:
 
 run with `--yolo` to skip all confirmations for the session.
 
+### openrouter key
+on first run you will be prompted to paste in your API key, which can be created <a href="https://openrouter.ai/settings/keys">here</a>. If you want to update your key, it can then be found in `config.toml`.
+
 ### config
 edit `config.toml` to add models, set pricing, toggle reasoning output, adjust cost limits, etc. models are listed on <a href="https://openrouter.ai/models">openrouter's site</a>
 
