@@ -329,9 +329,14 @@ def web_search(query: str, backend: str = "auto", session=None) -> str:
         with DDGS() as ddgs:
             for r in ddgs.text(query, backend=backend, max_results=5):
                 title = r.get('title', '')
-                printer.search_result(title, r.get('href', ''))
-                results.append(f"- {title}\n  {r.get('href', '')}")
-        return "\n\n".join(results) if results else "no results found"
+                results.append((title, r.get('href', '')))
+        # Print first 2 results, indicate rest
+        for title, url in results[:2]:
+            printer.search_result(title, url)
+        if len(results) > 2:
+            print(printer.c('blue', f'  +{len(results) - 2} more'))
+        formatted = [f"- {t}\n  {u}" for t, u in results]
+        return "\n\n".join(formatted) if results else "no results found"
     except Exception as e:
         return f"error: {e}"
 

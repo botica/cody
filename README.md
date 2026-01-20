@@ -22,7 +22,7 @@ run with `--yolo` to skip all confirmations for the session.
 edit `config.toml` to add models, set pricing, toggle reasoning output, adjust cost limits, etc.
 
 ---
-<img src="./imgs/screen3.png" width="800px">
-<img src="./imgs/screen4.png" width="800px">
+<img src="./imgs/screen5.png" width="800px">
+<img src="./imgs/screen6.png" width="800px">
 
 <p>The name 'Cody' comes from the 2003 movie, 'Agent Cody Banks', starring Frankie Muniz. Cody's design is heavily influenced by Claude, with its goal being simple/minimal code, robust tools, and an emphasis on functionality.</p>

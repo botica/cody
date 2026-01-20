@@ -70,8 +70,7 @@ def edit_diff(path: str, old: str, new: str, max_lines: int = 5, start_line: int
               ctx_before: str = None, ctx_after: str = None,
               old_fragment: str = None, new_fragment: str = None):
     """Print an edit_file diff preview with context and highlighted changes."""
-    line_info = f":{start_line}" if start_line else ""
-    print(f"{c('blue', '[edit_file]')} {c('blue', f'{path}{line_info}')}")
+    print(f"{c('blue', '[edit_file]')} {c('blue', path)}")
 
     def show_ctx(line_num: int, text: str):
         if text is not None:
@@ -189,10 +188,10 @@ def fetch_stats(method: str, raw: int, processed: int):
 
 
 def fetch_preview(text: str):
-    """Print preview of first 7 lines."""
-    lines = [l for l in text.splitlines() if l.strip()][:7]
+    """Print preview of first 3 lines."""
+    lines = [l for l in text.splitlines() if l.strip()][:3]
     if lines:
-        print(f"  {c('blue', '[first 7 lines]')}")
+        print(f"  {c('blue', '[first 3 lines]')}")
         for line in lines:
             print(f"  {c('blue', line[:SNIPPET_LEN])}")
 
