@@ -266,23 +266,27 @@ def fetch_webpage(url: str, use_browser: bool = False, session=None) -> str:
         print(printer.c('blue', f"{len(lines)} lines, {len(text)} chars"))
         return "\n".join(lines)
 
-    def extract(html: str) -> str:
-        """Extract main content using trafilatura"""
+    def extract(html: str) -> tuple[str, str]:
+        """Extract main content using trafilatura, fallback to BeautifulSoup if too short.
+        Returns (text, method_name)."""
         text = trafilatura.extract(html, include_tables=True)
-        if text:
-            return text
-        # Fallback to BeautifulSoup
-        soup = BeautifulSoup(html, "html.parser")
-        for tag in soup(["script", "style", "nav", "footer", "header"]):
-            tag.decompose()
-        return soup.get_text(separator="\n", strip=True)
+        # Fallback to BeautifulSoup if trafilatura strips too much (e.g. JS-heavy sites)
+        if not text or len(text) < 1000:
+            soup = BeautifulSoup(html, "html.parser")
+            for tag in soup(["script", "style", "nav", "footer", "header", "noscript"]):
+                tag.decompose()
+            soup_text = soup.get_text(separator="\n", strip=True)
+            # Use soup if it got more content
+            if not text or len(soup_text) > len(text):
+                return soup_text, "beautifulsoup"
+        return text, "trafilatura"
 
     def with_requests():
         resp = requests.get(url, timeout=15, headers=get_headers())
         resp.raise_for_status()
         raw_len = len(resp.text)
-        text = extract(resp.text)
-        printer.fetch_stats("trafilatura", raw_len, len(text))
+        text, method = extract(resp.text)
+        printer.fetch_stats(method, raw_len, len(text))
         printer.fetch_preview(text)
         return text
 
@@ -297,8 +301,8 @@ def fetch_webpage(url: str, use_browser: bool = False, session=None) -> str:
             browser.close()
         printer.fetch_browser_done()
         raw_len = len(html)
-        text = extract(html)
-        printer.fetch_stats("trafilatura", raw_len, len(text))
+        text, method = extract(html)
+        printer.fetch_stats(method, raw_len, len(text))
         printer.fetch_preview(text)
         return text
 

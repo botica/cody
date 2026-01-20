@@ -1,4 +1,4 @@
-"""Cody - terminal agent with tool"""
+"""cody - terminal agent"""
 
 import argparse
 import json

@@ -189,10 +189,10 @@ def fetch_stats(method: str, raw: int, processed: int):
 
 
 def fetch_preview(text: str):
-    """Print preview of first 10 lines (60 chars each)."""
-    lines = [l for l in text.splitlines() if l.strip()][:10]
+    """Print preview of first 7 lines."""
+    lines = [l for l in text.splitlines() if l.strip()][:7]
     if lines:
-        print(f"  {c('blue', '[first 10 lines]')}")
+        print(f"  {c('blue', '[first 7 lines]')}")
         for line in lines:
             print(f"  {c('blue', line[:SNIPPET_LEN])}")
 
