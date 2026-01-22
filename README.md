@@ -17,8 +17,8 @@ most tools require `y/n` confirmation. special inputs:
 - `b` - break back to input prompt
 
 ### flags
-run with `--yolo` to skip all confirmations for the session.
-run with `--cwd <path>` or `-C <path>` to set a different working directory for the agent.
+- `--yolo` - skip all confirmations for the session
+- `--cwd <path>` or `-C <path>` - set a different working directory
 
 ### openrouter api key
 on first run you will be prompted to paste in your API key, which can be created <a href="https://openrouter.ai/settings/keys">here</a>. If you want to update your key, it can then be found in `config.toml`.
