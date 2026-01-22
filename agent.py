@@ -1,4 +1,4 @@
-"""cody - terminal agent. this file is the loop, handling tool calls and output"""
+"""cody - terminal agent. this file is the loop, handling tool calls, user input, console reasoning/regular output. and slash commands."""
 
 import argparse
 import json

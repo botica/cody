@@ -16,13 +16,15 @@ most tools require `y/n` confirmation. special inputs:
 - `!` - auto-confirm for rest of turn
 - `b` - break back to input prompt
 
+### flags
 run with `--yolo` to skip all confirmations for the session.
+run with `--cwd <path>` or `-C <path>` to set a different working directory for the agent.
 
-### openrouter key
+### openrouter api key
 on first run you will be prompted to paste in your API key, which can be created <a href="https://openrouter.ai/settings/keys">here</a>. If you want to update your key, it can then be found in `config.toml`.
 
 ### config
-edit `config.toml` to add models, set pricing, toggle reasoning output, adjust cost limits, etc. models are listed on <a href="https://openrouter.ai/models">openrouter's site</a>
+edit `config.toml` to add models, set pricing, toggle reasoning output, adjust cost limits, as well as modify the system prompt. models are listed on <a href="https://openrouter.ai/models">openrouter's site</a>
 
 ---
 <img src="./imgs/screen5.png" width="800px">
