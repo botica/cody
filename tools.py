@@ -227,9 +227,10 @@ def search(pattern: str, path: str = ".", file_pattern: str = None, session=None
             cmd.extend(["-g", file_pattern])
 
         result = subprocess.run(cmd, capture_output=True, encoding="utf-8", timeout=10)
-        if result.returncode == 0:
+        # Return matches even if there were some errors (e.g., unreadable files like Windows NUL)
+        if result.stdout.strip():
             return result.stdout.strip()
-        elif result.returncode == 1:
+        if result.returncode == 1:
             return "no matches found"
         return f"error: {result.stderr}"
     except PermissionError as e:
