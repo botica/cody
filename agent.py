@@ -166,7 +166,7 @@ def main():
             if prompt.strip() == "/clear":
                 session.conversation = [{"role": "system", "content": get_system_prompt(session.cwd)}]
                 session.token_usage = {"input": 0, "output": 0, "cost": 0.0}
-                print("[cleared]")
+                print(printer.c('blue', "[cleared]"))
                 continue
             if prompt.strip().startswith("/model"):
                 printer.user_input(prompt)
