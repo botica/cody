@@ -1,9 +1,15 @@
 <div align="center">
   <img src="./imgs/cody.png" width="128px">
 </div>
-<p>cody is a command-line agentic harness for openrouter models</p>
+<p>cody is a command-line agent powered by local LLMs via Ollama</p>
 <p>cody has these tools: read_file, list_directory, write_file, edit_file, delete_file, search, fetch_webpage, web_search, and run_bash.</p>
-<p>run as <code>python agent.py</code> after installing the dependencies in requirements.txt as well as <a href="https://github.com/BurntSushi/ripgrep">ripgrep</a></p>
+
+### setup
+1. install [Ollama](https://ollama.com)
+2. pull a model: `ollama pull llama3.1:8b`
+3. install dependencies: `pip install -r requirements.txt`
+4. install [ripgrep](https://github.com/BurntSushi/ripgrep)
+5. run: `python agent.py`
 
 ### commands
 - `/model` - list available models and switch (e.g. `/model 3`)
@@ -20,11 +26,8 @@ most tools require `y/n` confirmation. special inputs:
 - `--yolo` - skip all confirmations for the session
 - `--cwd <path>` or `-C <path>` - set a different working directory
 
-### openrouter api key
-on first run you will be prompted to paste in your API key, which can be created <a href="https://openrouter.ai/settings/keys">here</a>. If you want to update your key, it can then be found in `config.toml`.
-
 ### config
-edit `config.toml` to add models, set pricing, toggle reasoning output, adjust cost limits, as well as modify the system prompt. models are listed on <a href="https://openrouter.ai/models">openrouter's site</a>
+edit `config.toml` to add models, toggle reasoning output, and modify the system prompt. add any models you've pulled to `available_models` to enable switching.
 
 ---
 <img src="./imgs/screen5.png" width="800px">

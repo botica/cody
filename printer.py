@@ -159,10 +159,6 @@ def reasoning(count: int):
     print(c('dim', f'[reasoning] captured {count} blocks'))
 
 
-def limit_warning(cost: float):
-    """Print turn cost limit warning."""
-    print(c('blue', f"\n[limit] Turn exceeded ${cost:.2f}, cancelling"))
-
 
 def item(text: str):
     """Print a list item (like directory entries)."""
@@ -250,25 +246,17 @@ def usage(call_in: int, call_out: int, call_cost: float | None,
     print(c('blue', msg))
 
 
-def config_error():
-    """Print API key configuration error."""
-    print(c('blue', "error: OPENROUTER_API_KEY not set"))
-    print(c('blue', "create a .env file with:"))
-    print(c('blue', "  OPENROUTER_API_KEY=your_key_here"))
-
-
 def banner(name: str, model: str):
     """Print startup banner."""
     print(f"{COLORS.get('lavender', '')}{name} [{model}]{COLORS['reset']}")
 
 
 def model_list(models):
-    """Print list of models with pricing."""
+    """Print list of available models."""
     print(c('blue', "Models (current model marked with '*'):"))
-    for i, (name, prices, is_current) in enumerate(models, 1):
-        inp, out = prices[0], prices[1]
+    for i, (name, is_current) in enumerate(models, 1):
         marker = '*' if is_current else ' '
-        print(f"  {c('blue', f'{marker}{i}. {name} ${inp:.2f}/${out:.2f}')}")
+        print(f"  {c('blue', f'{marker}{i}. {name}')}")
     print(c('blue', '\n  /model <n> to switch'))
 
 

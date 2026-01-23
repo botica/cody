@@ -1,4 +1,4 @@
-"""OpenRouter API streaming and response handling."""
+"""Ollama API streaming and response handling (native API)."""
 
 import json
 import uuid
@@ -8,10 +8,9 @@ from tools import get_tools_schema
 import printer
 import config
 
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+OLLAMA_URL = "http://localhost:11434/api/chat"
 
 # Re-export config values (use config.MODEL directly for dynamic switching)
-MAX_TURN_COST = config.MAX_TURN_COST
 SHOW_REASONING = config.SHOW_REASONING
 
 
@@ -21,20 +20,25 @@ def get_model():
 
 
 def check_config():
-    """Check if API key is configured, prompt if missing."""
-    if not config.API_KEY:
-        if not config.prompt_api_key():
-            return False
-        # Reload the module-level constant
-        config.API_KEY = config._cfg["api_key"]
-    return True
+    """Check if Ollama is reachable."""
+    try:
+        requests.get("http://localhost:11434/", timeout=2)
+        return True
+    except requests.exceptions.RequestException:
+        printer.error("can't connect to Ollama - is it running? (ollama serve)")
+        return False
 
 
 def stream_completion(conversation: list, session) -> tuple[str, list[dict], dict | None]:
-    headers, payload = _prepare_request_data(conversation)
+    payload = {
+        "model": config.MODEL,
+        "messages": conversation,
+        "tools": get_tools_schema(),
+        "stream": True
+    }
 
     try:
-        response = requests.post(OPENROUTER_URL, headers=headers, json=payload, stream=True, timeout=60)
+        response = requests.post(OLLAMA_URL, json=payload, stream=True, timeout=120)
     except requests.exceptions.RequestException as e:
         printer.error(f"connection failed: {e}")
         return "", [], None
@@ -45,80 +49,61 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
             _handle_api_error(response)
             return "", [], None
 
-        # State for aggregation
-        tool_calls_by_index = {}
         current_text = ""
-        call_usage = None
-        reasoning_details = None
-        
-        # State for display
+        tool_calls = []
+        prompt_tokens = 0
+        completion_tokens = 0
         at_line_start = True
-        had_reasoning = False
 
-        for data_obj in _iter_sse_stream(response):
-            if "usage" in data_obj:
-                call_usage = data_obj["usage"]
-
-            if not data_obj.get("choices"):
+        for line in response.iter_lines(decode_unicode=True):
+            if not line:
                 continue
 
-            choice = data_obj["choices"][0]
-            delta = choice.get("delta", {})
+            try:
+                data = json.loads(line)
+            except json.JSONDecodeError:
+                continue
 
-            # 1. Update Reasoning Details (DeepSeek/Generic)
-            if "reasoning_details" in choice.get("message", {}):
-                reasoning_details = choice["message"]["reasoning_details"]
-            elif "reasoning_details" in delta:
-                reasoning_details = delta["reasoning_details"]
+            # Get message content
+            message = data.get("message", {})
+            content = message.get("content", "")
 
-            # 2. Stream Reasoning Content
-            reasoning = delta.get("reasoning") or delta.get("reasoning_content")
-            if reasoning and SHOW_REASONING:
-                printer.stream_reasoning(reasoning)
-                at_line_start = reasoning.endswith('\n')
-                had_reasoning = True
-
-            # 3. Stream Main Content
-            content = delta.get("content")
             if content:
-                if had_reasoning:
-                    if not at_line_start:
-                        print(printer.COLORS['reset'], end='', flush=True)
-                        printer.newline()
-                    had_reasoning = False
-                
                 printer.stream_content(content)
                 current_text += content
                 at_line_start = content.endswith('\n')
 
-            # 4. Accumulate Tool Calls
-            if "tool_calls" in delta:
-                _process_tool_calls(delta["tool_calls"], tool_calls_by_index)
+            # Check for tool calls
+            if message.get("tool_calls"):
+                for tc in message["tool_calls"]:
+                    func = tc.get("function", {})
+                    tool_calls.append({
+                        "id": f"call_{uuid.uuid4().hex[:8]}",
+                        "name": func.get("name", ""),
+                        "arguments": json.dumps(func.get("arguments", {}))
+                    })
+
+            # Final message has done=true and token counts
+            if data.get("done"):
+                prompt_tokens = data.get("prompt_eval_count", 0)
+                completion_tokens = data.get("eval_count", 0)
 
     # Final cleanup
-    if not at_line_start:
+    if current_text and not at_line_start:
         print(printer.COLORS['reset'], end='', flush=True)
         printer.newline()
 
-    if call_usage:
-        _print_usage(call_usage, session)
+    # Update usage
+    if prompt_tokens or completion_tokens:
+        session.token_usage["input"] += prompt_tokens
+        session.token_usage["output"] += completion_tokens
+        session.turn_tokens_in += prompt_tokens
+        session.turn_tokens_out += completion_tokens
+        printer.usage(prompt_tokens, completion_tokens, None,
+                      session.turn_tokens_in, session.turn_tokens_out, None,
+                      session.token_usage['input'], session.token_usage['output'], None)
 
-    return current_text, list(tool_calls_by_index.values()), reasoning_details
-
-
-def _prepare_request_data(conversation: list) -> tuple[dict, dict]:
-    headers = {
-        "Authorization": f"Bearer {config.API_KEY}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "model": config.MODEL,
-        "messages": conversation,
-        "tools": get_tools_schema(),
-        "stream": True,
-        "stream_options": {"include_usage": True}
-    }
-    return headers, payload
+    return current_text, tool_calls, None
 
 
 def _handle_api_error(response):
@@ -126,71 +111,7 @@ def _handle_api_error(response):
     try:
         error_data = response.json()
         if "error" in error_data:
-            error_msg += f": {error_data['error'].get('message', error_data['error'])}"
+            error_msg += f": {error_data['error']}"
     except Exception:
         error_msg += f": {response.text[:200]}"
     printer.error(error_msg)
-
-
-def _iter_sse_stream(response):
-    """Yields parsed JSON objects from an SSE stream."""
-    buffer = ""
-    for chunk in response.iter_content(chunk_size=1024, decode_unicode=True):
-        buffer += chunk
-        
-        while True:
-            line_end = buffer.find('\n')
-            if line_end == -1:
-                break
-
-            line = buffer[:line_end].strip()
-            buffer = buffer[line_end + 1:]
-
-            if not line.startswith('data: '):
-                continue
-
-            data = line[6:]
-            if data == '[DONE]':
-                return
-
-            try:
-                yield json.loads(data)
-            except json.JSONDecodeError as e:
-                printer.debug(f"JSON decode error: {e} in: {data[:100]}")
-                continue
-
-
-def _process_tool_calls(tool_calls_list, tool_calls_by_index):
-    for tc in tool_calls_list:
-        idx = tc["index"]
-        if idx not in tool_calls_by_index:
-            tool_calls_by_index[idx] = {
-                "id": tc.get("id") or f"call_{uuid.uuid4().hex[:8]}",
-                "name": tc.get("function", {}).get("name", ""),
-                "arguments": ""
-            }
-
-        if "function" in tc and "arguments" in tc["function"]:
-            tool_calls_by_index[idx]["arguments"] += tc["function"]["arguments"]
-
-
-def _print_usage(call_usage: dict, session):
-    inp = call_usage.get("prompt_tokens", 0)
-    out = call_usage.get("completion_tokens", 0)
-    session.token_usage["input"] += inp
-    session.token_usage["output"] += out
-    session.turn_tokens_in += inp
-    session.turn_tokens_out += out
-
-    pricing = config.MODEL_PRICING.get(config.MODEL)
-    if pricing:
-        call_cost = (inp * pricing[0] + out * pricing[1]) / 1_000_000
-        session.token_usage["cost"] += call_cost
-        session.turn_cost += call_cost
-        printer.usage(inp, out, call_cost,
-                      session.turn_tokens_in, session.turn_tokens_out, session.turn_cost,
-                      session.token_usage['input'], session.token_usage['output'], session.token_usage['cost'])
-    else:
-        printer.usage(inp, out, None,
-                      session.turn_tokens_in, session.turn_tokens_out, None,
-                      session.token_usage['input'], session.token_usage['output'], None)

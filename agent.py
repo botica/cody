@@ -7,7 +7,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from api import stream_completion, get_model, check_config, MAX_TURN_COST, SHOW_REASONING
+from api import stream_completion, get_model, check_config, SHOW_REASONING
 from tools import execute_tool
 import printer
 import config
@@ -56,12 +56,6 @@ def run(prompt: str, session: Session) -> None:
     while True:
         text, tool_calls, reasoning_details = stream_completion(session.conversation, session)
 
-        # Check cost limit
-        if session.turn_cost > MAX_TURN_COST:
-            printer.limit_warning(MAX_TURN_COST)
-            session.conversation = session.conversation[:conversation_start]
-            break
-
         if not tool_calls:
             if text:
                 msg = {"role": "assistant", "content": text}
@@ -70,38 +64,29 @@ def run(prompt: str, session: Session) -> None:
                 session.conversation.append(msg)
             break
 
+        # Build Ollama-format tool calls (no id/type wrapper, arguments as dict)
         def build_tool_call(tc):
-            return {
-                "id": tc["id"],
-                "type": "function",
-                "function": {"name": tc["name"], "arguments": tc["arguments"]}
-            }
+            try:
+                args = json.loads(tc["arguments"]) if isinstance(tc["arguments"], str) else tc["arguments"]
+            except json.JSONDecodeError:
+                args = {}
+            return {"function": {"name": tc["name"], "arguments": args}}
 
         assistant_msg = {"role": "assistant", "tool_calls": [build_tool_call(tc) for tc in tool_calls]}
         if text:
             assistant_msg["content"] = text
-        if reasoning_details:
-            assistant_msg["reasoning_details"] = reasoning_details
         session.conversation.append(assistant_msg)
 
         for tc in tool_calls:
             try:
-                args = json.loads(tc.get("arguments", "{}"))
+                args = json.loads(tc.get("arguments", "{}")) if isinstance(tc.get("arguments"), str) else tc.get("arguments", {})
             except json.JSONDecodeError as e:
-                session.conversation.append({
-                    "role": "tool",
-                    "tool_call_id": tc["id"],
-                    "content": f"error: invalid JSON arguments: {e}"
-                })
+                session.conversation.append({"role": "tool", "content": f"error: invalid JSON arguments: {e}"})
                 continue
 
             printer.tool_call(tc['name'], args)
             result = execute_tool(tc["name"], args, session)
-            session.conversation.append({
-                "role": "tool",
-                "tool_call_id": tc["id"],
-                "content": result
-            })
+            session.conversation.append({"role": "tool", "content": result})
 
 
 def handle_model_command(cmd: str):
