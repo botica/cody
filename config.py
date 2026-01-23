@@ -7,9 +7,10 @@ CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.toml")
 
 DEFAULTS = {
     "api_key": "",
-    "model": "google/gemini-3-pro-preview",
+    "model": "google/gemini-3-flash-preview",
     "model_pricing": {
         "google/gemini-3-pro-preview": (2.00, 12.00),
+        "google/gemini-3-flash-preview": (1.00, 3.00),
         "minimax/minimax-m2.1": (0.30, 1.20),
         "x-ai/grok-code-fast-1": (0.20, 1.50),
         "z-ai/glm-4.7": (0.40, 1.50),
