@@ -1,7 +1,7 @@
 <div align="center">
   <img src="./imgs/cody.png" width="128px">
 </div>
-<p>cody is a command-line agentic harness for openrouter models</p>
+<p>cody is a command-line agent harnessing openrouter's streaming api</p>
 <p>cody has these tools: read_file, list_directory, write_file, edit_file, delete_file, search, fetch_webpage, web_search, and run_bash.</p>
 <p>run as <code>python agent.py</code> after installing the dependencies in requirements.txt as well as <a href="https://github.com/BurntSushi/ripgrep">ripgrep</a></p>
 
