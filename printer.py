@@ -78,27 +78,29 @@ def edit_diff(path: str, old: str, new: str, max_lines: int = 5, start_line: int
 
     def highlight_line(line: str, fragment: str, base_color: str, hl_color: str):
         """Highlight fragment within line using hl_color, rest in base_color."""
-        trunc = line[:SNIPPET_LEN]
         if not fragment:
-            return c(base_color, trunc)
+            return c(base_color, line[:SNIPPET_LEN])
         # Check if fragment is in line
-        if fragment in line:
-            idx = line.find(fragment)
-            # If fragment starts at beginning or covers whole line, use base_color
-            if idx == 0:
-                return c(base_color, trunc)
-            # Partial match - highlight just the fragment
-            before = line[:idx]
-            after = line[idx + len(fragment):]
-            remaining = SNIPPET_LEN
-            before_t = before[:remaining]
-            remaining -= len(before_t)
-            frag_t = fragment[:remaining]
-            remaining -= len(frag_t)
-            after_t = after[:max(0, remaining)]
-            return c(base_color, before_t) + c(hl_color, frag_t) + c(base_color, after_t)
-        # Line not matching fragment, use base_color
-        return c(base_color, trunc)
+        if fragment not in line:
+            return c(base_color, line[:SNIPPET_LEN])
+        # If fragment starts at beginning or covers whole line, use base_color
+        idx = line.find(fragment)
+        if idx == 0:
+            return c(base_color, line[:SNIPPET_LEN])
+        # Center the snippet around the change
+        half_width = SNIPPET_LEN // 2
+        start = max(0, idx - half_width)
+        end = min(len(line), idx + len(fragment) + half_width)
+        trunc = line[start:end]
+        # Recalculate index in truncated view
+        new_idx = idx - start
+        before = trunc[:new_idx]
+        frag = trunc[new_idx:new_idx + len(fragment)]
+        after = trunc[new_idx + len(fragment):]
+        # Build the result with ellipsis for context
+        prefix = c('blue', '...') if start > 0 else ''
+        suffix = c('blue', '...') if end < len(line) else ''
+        return prefix + c(base_color, before) + c(hl_color, frag) + c(base_color, after) + suffix
 
     def show_lines(text: str, prefix: str, base_color: str, hl_color: str, fragment: str, line_num: int = None):
         lines = text.splitlines() if text else []
