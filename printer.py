@@ -18,48 +18,50 @@ def c(color: str, text: str) -> str:
     return f"{COLORS.get(color, '')}{text}{COLORS['reset']}"
 
 
+def _edit_file_preview(args: dict):
+    """Print edit_file preview with context and diff."""
+    path = args.get('path', '')
+    old_string = args.get('old_string', '')
+    new_string = args.get('new_string', '')
+    start_line = None
+    ctx_before = ctx_after = None
+    old_lines = new_lines = None
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        # Find the correct occurrence (1-indexed), default to first
+        occurrence = args.get('occurrence', 1) or 1
+        idx = -1
+        search_start = 0
+        for _ in range(occurrence):
+            idx = content.find(old_string, search_start)
+            if idx == -1:
+                break
+            search_start = idx + 1
+        if idx >= 0:
+            start_line = content[:idx].count('\n') + 1
+            end_line = start_line + old_string.count('\n')
+            lines = content.splitlines()
+            old_lines = '\n'.join(lines[start_line - 1:end_line])
+            new_lines = old_lines.replace(old_string, new_string, 1)
+            if start_line > 1:
+                ctx_before = lines[start_line - 2]
+            if end_line < len(lines):
+                ctx_after = lines[end_line]
+    except Exception as e:
+        print(c('blue', f'[edit_file] failed to read {path}: {e}'))
+        old_lines, new_lines = old_string, new_string
+    edit_diff(path, old_lines or old_string, new_lines or new_string,
+              start_line=start_line, ctx_before=ctx_before, ctx_after=ctx_after,
+              old_fragment=old_string, new_fragment=new_string)
+
+
 def tool_call(name: str, args: dict | str = None):
     """Print a tool call with appropriate formatting based on tool type."""
     if name == 'write_file' and isinstance(args, dict) and 'content' in args:
         write_preview(args.get('path', ''), args['content'])
     elif name == 'edit_file' and isinstance(args, dict):
-        path = args.get('path', '')
-        old_string = args.get('old_string', '')
-        new_string = args.get('new_string', '')
-        # Find full lines containing the edit and context
-        start_line = None
-        ctx_before = ctx_after = None
-        old_lines = new_lines = None
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            # Find the correct occurrence (1-indexed), default to first
-            occurrence = args.get('occurrence', 1) or 1
-            idx = -1
-            search_start = 0
-            for _ in range(occurrence):
-                idx = content.find(old_string, search_start)
-                if idx == -1:
-                    break
-                search_start = idx + 1
-            if idx >= 0:
-                start_line = content[:idx].count('\n') + 1
-                end_line = start_line + old_string.count('\n')
-                lines = content.splitlines()
-                # Get full lines containing the edit
-                old_lines = '\n'.join(lines[start_line - 1:end_line])
-                new_lines = old_lines.replace(old_string, new_string, 1)
-                # Context
-                if start_line > 1:
-                    ctx_before = lines[start_line - 2]
-                if end_line < len(lines):
-                    ctx_after = lines[end_line]
-        except Exception as e:
-            print(c('blue', f'[edit_file] failed to read {path}: {e}'))
-            old_lines, new_lines = old_string, new_string
-        edit_diff(path, old_lines or old_string, new_lines or new_string,
-                  start_line=start_line, ctx_before=ctx_before, ctx_after=ctx_after,
-                  old_fragment=old_string, new_fragment=new_string)
+        _edit_file_preview(args)
     elif isinstance(args, dict) and args:
         args_str = " ".join(f"{k}={str(v)[:SNIPPET_LEN]}" for k, v in args.items())
         print(f"{c('blue', f'[{name}]')} {c('blue', args_str)}")
