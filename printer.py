@@ -78,25 +78,31 @@ def edit_diff(path: str, old: str, new: str, max_lines: int = 5, start_line: int
 
     def highlight_line(line: str, fragment: str, base_color: str, hl_color: str):
         """Highlight fragment within line using hl_color, rest in base_color."""
-        if not fragment:
+        if not fragment or fragment not in line:
             return c(base_color, line[:SNIPPET_LEN])
-        # Check if fragment is in line
-        if fragment not in line:
-            return c(base_color, line[:SNIPPET_LEN])
-        # If fragment starts at beginning or covers whole line, use base_color
+
         idx = line.find(fragment)
-        if idx == 0:
-            return c(base_color, line[:SNIPPET_LEN])
-        # Center the snippet around the change
-        half_width = SNIPPET_LEN // 2
-        start = max(0, idx - half_width)
-        end = min(len(line), idx + len(fragment) + half_width)
+        frag_len = len(fragment)
+
+        # Center the window on the middle of the fragment
+        frag_center = idx + frag_len // 2
+        start = max(0, frag_center - SNIPPET_LEN // 2)
+        end = start + SNIPPET_LEN
+
+        # Adjust if we hit the end of the line
+        if end > len(line):
+            end = len(line)
+            start = max(0, end - SNIPPET_LEN)
+
         trunc = line[start:end]
+
         # Recalculate index in truncated view
         new_idx = idx - start
-        before = trunc[:new_idx]
-        frag = trunc[new_idx:new_idx + len(fragment)]
-        after = trunc[new_idx + len(fragment):]
+        frag_end = min(new_idx + frag_len, len(trunc))
+        before = trunc[:new_idx] if new_idx > 0 else ''
+        frag = trunc[new_idx:frag_end]
+        after = trunc[frag_end:]
+
         # Build the result with ellipsis for context
         prefix = c('blue', '...') if start > 0 else ''
         suffix = c('blue', '...') if end < len(line) else ''
