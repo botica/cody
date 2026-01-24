@@ -9,8 +9,8 @@ COLORS = {
     "lavender": "\033[38;5;183m",
     "dim": "\033[48;5;233m\033[38;5;23m",  # dark grey bg, teal text
     "highlight": "\033[48;5;23m\033[38;5;255m",  # teal bg, white text
-    "del": "\033[38;5;23m",  # teal text, no bg
-    "add": "\033[48;5;234m\033[38;5;183m",  # slightly lighter grey bg, lavender text
+    "del": "\033[48;5;234m\033[38;5;23m",  # teal text, grey bg
+    "add": "\033[48;5;235m\033[38;5;183m",  # lighter grey bg, lavender text
 }
 
 def c(color: str, text: str) -> str:
@@ -33,7 +33,15 @@ def tool_call(name: str, args: dict | str = None):
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 content = f.read()
-            idx = content.find(old_string)
+            # Find the correct occurrence (1-indexed), default to first
+            occurrence = args.get('occurrence', 1) or 1
+            idx = -1
+            search_start = 0
+            for _ in range(occurrence):
+                idx = content.find(old_string, search_start)
+                if idx == -1:
+                    break
+                search_start = idx + 1
             if idx >= 0:
                 start_line = content[:idx].count('\n') + 1
                 end_line = start_line + old_string.count('\n')
@@ -104,8 +112,8 @@ def edit_diff(path: str, old: str, new: str, max_lines: int = 5, start_line: int
         after = trunc[frag_end:]
 
         # Build the result with ellipsis for context
-        prefix = c('blue', '...') if start > 0 else ''
-        suffix = c('blue', '...') if end < len(line) else ''
+        prefix = c(base_color, '...') if start > 0 else ''
+        suffix = c(base_color, '...') if end < len(line) else ''
         return prefix + c(base_color, before) + c(hl_color, frag) + c(base_color, after) + suffix
 
     def show_lines(text: str, prefix: str, base_color: str, hl_color: str, fragment: str, line_num: int = None):

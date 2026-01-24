@@ -157,7 +157,7 @@ def write_file(path: str, content: str, session=None) -> str:
         return f"error: {e}"
 
 
-def edit_file(path: str, new_string: str = "", old_string: str = "", replace_all: bool = False, session=None) -> str:
+def edit_file(path: str, new_string: str = "", old_string: str = "", replace_all: bool = False, occurrence: int = None, session=None) -> str:
     try:
         full_path = _resolve_in_workspace(session, path)
         with open(full_path, "r", encoding="utf-8") as f:
@@ -177,8 +177,23 @@ def edit_file(path: str, new_string: str = "", old_string: str = "", replace_all
             return f"error: old_string not found in {path}.{hint}"
 
         count = content.count(old_string)
-        if count > 1 and not replace_all:
-            return f"error: old_string appears {count} times in {path}. use replace_all=true to replace all."
+        if count > 1 and not replace_all and occurrence is None:
+            return f"error: old_string appears {count} times in {path}. use replace_all=true to replace all or specify occurrence (1-indexed)."
+
+        if occurrence is not None:
+            if occurrence < 1 or occurrence > count:
+                return f"error: occurrence {occurrence} out of range (found {count} matches)."
+            
+            # Split by old_string
+            parts = content.split(old_string)
+            # Reconstruct with replacement at specific index
+            # parts has count + 1 elements. 
+            # We want to put new_string between parts[occurrence-1] and parts[occurrence]
+            new_content = old_string.join(parts[:occurrence]) + new_string + old_string.join(parts[occurrence:])
+            
+            with open(full_path, "w", encoding="utf-8") as f:
+                f.write(new_content)
+            return f"edited occurrence {occurrence} of '{old_string}' in {path}"
 
         with open(full_path, "w", encoding="utf-8") as f:
             if replace_all:
@@ -406,6 +421,7 @@ SCHEMAS = [
             "new_string": {"type": "string", "description": "Replacement text (omit to delete old_string)"},
             "old_string": {"type": "string", "description": "Text to find and replace (omit to append new_string)"},
             "replace_all": {"type": "boolean", "description": "Replace all occurrences (default: false)"},
+            "occurrence": {"type": "integer", "description": "Specific occurrence to replace (1-indexed). Use when old_string appears multiple times."},
         },
         "required": ["path"]
     }},
