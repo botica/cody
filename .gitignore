@@ -5,6 +5,7 @@ nul
 .claude/
 .env
 config.toml
+imgs/cody.xcf
 
 # Python
 __pycache__/
