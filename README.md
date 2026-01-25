@@ -1,6 +1,31 @@
 <div align="center">
-  <img src="./banks.png" alt="strap in" width="200px">
+  <img src="./imgs/cody.png" width="128px">
 </div>
-<p>cody is a command-line agent using gpt5.2 (or openrouter) for inference</p>
-<p>feel free to give him a whirl --> python agent.py</p>
-<p>uses <a href="https://github.com/BurntSushi/ripgrep">ripgrep</a> for search</p>
+<p>cody is a cl agent using native openai sdk</p>
+<p>cody has these tools: read_file, list_directory, write_file, edit_file, delete_file, search, fetch_webpage, web_search, and run_bash</p>
+<p>run as <code>python agent.py</code> after installing the dependencies in requirements.txt as well as <a href="https://github.com/BurntSushi/ripgrep">ripgrep</a></p>
+
+### slash commands
+- `/model` - list available models, and switch models  `/model <n>`
+- `/clear` - clear session context
+- `---` - enter this delimeter on its own line to paste in multiple lines at a time. then enter it again to stop.
+- `ctrl-c` - kill cody
+
+### confirmations
+most tools require `y/n` confirmation. special inputs:
+- `!` - auto-confirm for rest of turn
+- `b` - enter to break back to input prompt, and give another direction
+
+### flags
+- `--yolo` - skip all confirmations for the session
+- `--cwd <path>` or `-C <path>` - set a different working directory
+
+### openai api key
+on first run you will be prompted to paste in your API key, which can be created on OpenAI's site. 
+
+### config
+edit `config.toml` to add models, set pricing, toggle reasoning output, adjust cost limits, edit api key, as well as modify the system prompt. models are listed on <a href="https://openrouter.ai/models">openrouter's site</a>
+
+---
+<img src="./imgs/screen5.png" width="800px">
+<img src="./imgs/screen6.png" width="800px">

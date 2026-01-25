@@ -1,0 +1,14 @@
+# Local config / secrets (do not commit)
+openrouter-key
+TODO
+nul
+.claude/
+.env
+config.toml
+imgs/cody.xcf
+cody-streamer-key
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
