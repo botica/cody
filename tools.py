@@ -44,13 +44,8 @@ def confirm_action(name: str, args: dict, session) -> bool | str:
         if lower in ("y", "yes"):
             return True
         if lower in ("n", "no"):
-            return False
-        if lower == "b":
-            print(printer.c('blue', '> '), end='', flush=True)
-            user_input = input().strip()
-            if user_input:
-                printer.user_input(user_input)
-                return user_input
+            # Deny and yield control back to the user prompt.
+            # We intentionally do NOT collect more input here; the main loop will.
             return False
         return False
     except (KeyboardInterrupt, EOFError):
@@ -62,9 +57,7 @@ def execute_tool(name: str, args: dict, session) -> str:
     if name in CONFIRM_TOOLS:
         confirm_result = confirm_action(name, args, session)
         if confirm_result is False:
-            return "tool call denied."
-        if isinstance(confirm_result, str):
-            return f"tool call denied. user response: {confirm_result}"
+            return "TOOL_DENIED"
 
     handler = HANDLERS.get(name)
     if not handler:
