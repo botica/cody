@@ -14,7 +14,7 @@
 ### confirmations
 most tools require `y/n` confirmation. special inputs:
 - `!` - auto-confirm for rest of turn
-- `b` - enter to break back to input prompt, and give another direction
+- `n` - deny the tool call and yield back to the input prompt (cody cancels any pending tool calls for that turn)
 
 ### flags
 - `--yolo` - skip all confirmations for the session

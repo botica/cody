@@ -84,6 +84,8 @@ def run(prompt: str, session: Session) -> None:
             assistant_msg["reasoning_details"] = reasoning_details
         session.conversation.append(assistant_msg)
 
+        denied = False
+
         for tc in tool_calls:
             try:
                 args = json.loads(tc.get("arguments", "{}"))
@@ -102,6 +104,15 @@ def run(prompt: str, session: Session) -> None:
                 "tool_call_id": tc["id"],
                 "content": result
             })
+
+            # If the user denied the tool call, yield control back to the user prompt.
+            # This prevents the model from immediately trying again in the same turn.
+            if isinstance(result, str) and result.startswith("TOOL_DENIED"):
+                denied = True
+                break
+
+        if denied:
+            break
 
 
 def handle_model_command(cmd: str):

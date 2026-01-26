@@ -7,13 +7,15 @@ CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.toml")
 
 DEFAULTS = {
     "api_key": "",
-    "model": "gpt-5.2",
+    "model": "gpt-5-mini",
     "model_pricing": {
         "gpt-4o": (2.50, 10.00),
         "gpt-4o-mini": (0.15, 0.60),
         "o1-preview": (15.00, 60.00),
         "o3-mini": (1.10, 4.40),
         "gpt-5.2": (1.75, 14.00),
+        "gpt-5.2-pro": (4.40, 17.60),
+        "gpt-5-mini": (0.15, 0.60),
     },
     "max_turn_cost": 0.20,
     "show_reasoning": True,

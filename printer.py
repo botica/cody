@@ -292,7 +292,7 @@ def model_list(models):
 
 def confirm(name: str, detail: str):
     """Print confirmation prompt."""
-    print(f"\n{c('blue', f'confirm {name} {detail}? [y/n/!/b]')} ", end="", flush=True)
+    print(f"\n{c('blue', f'confirm {name} {detail}? [y/n/!]')} ", end="", flush=True)
 
 
 def user_input(text: str, extra_lines: int = 0, prompt_len: int = 2):
