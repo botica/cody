@@ -24,7 +24,7 @@ most tools require `y/n` confirmation. special inputs:
 on first run you will be prompted to paste in your API key, which can be created on OpenAI's site. 
 
 ### config
-edit `config.toml` to add models, set pricing, toggle reasoning output, adjust cost limits, edit api key, as well as modify the system prompt. models are listed on <a href="https://openrouter.ai/models">openrouter's site</a>
+edit `config.toml` to add models, set pricing, toggle reasoning output, adjust cost limits, edit api key, as well as modify the system prompt.
 
 ---
 <img src="./imgs/openai-screen.png" width="800px">
