@@ -49,8 +49,9 @@ def confirm_action(name: str, args: dict, session) -> bool | str:
             return False
         return False
     except (KeyboardInterrupt, EOFError):
-        print()
-        sys.exit(0)
+        # Treat Ctrl-C during confirmation as "cancel this turn" (not exit the whole program).
+        printer.newline()
+        raise KeyboardInterrupt
 
 
 def execute_tool(name: str, args: dict, session) -> str:

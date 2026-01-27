@@ -5,16 +5,18 @@
 <p>cody has these tools: read_file, list_directory, write_file, edit_file, delete_file, search, fetch_webpage, web_search, and run_bash</p>
 <p>run as <code>python agent.py</code> after installing the dependencies in requirements.txt as well as <a href="https://github.com/BurntSushi/ripgrep">ripgrep</a></p>
 
-### slash commands
+### commands
 - `/model` - list available models, and switch models  `/model <n>`
 - `/clear` - clear session context
 - `---` - enter this delimeter on its own line to paste in multiple lines at a time. then enter it again to stop.
-- `ctrl-c` - kill cody
+- `ctrl-c`
+  - during turn: cancel turn
+  - at user prompt: exit program
 
 ### confirmations
 most tools require `y/n` confirmation. special inputs:
 - `!` - auto-confirm for rest of turn
-- `n` - deny the tool call and yield back to the input prompt (cody cancels any pending tool calls for that turn)
+- `n` - deny the tool call and yield back to the input prompt
 
 ### flags
 - `--yolo` - skip all confirmations for the session

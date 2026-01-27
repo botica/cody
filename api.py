@@ -34,7 +34,11 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
     headers, payload = _prepare_request_data(conversation)
 
     try:
-        response = requests.post(OPENROUTER_URL, headers=headers, json=payload, stream=True, timeout=60)
+        # Use a moderate read timeout so Ctrl-C can still interrupt promptly,
+        # but we don't fail the request if the server takes a moment before
+        # sending the first streaming chunk.
+        # (connect timeout, read timeout)
+        response = requests.post(OPENROUTER_URL, headers=headers, json=payload, stream=True, timeout=(10, 10))
     except requests.exceptions.RequestException as e:
         printer.error(f"connection failed: {e}")
         return "", [], None
@@ -133,9 +137,15 @@ def _handle_api_error(response):
 
 
 def _iter_sse_stream(response):
-    """Yields parsed JSON objects from an SSE stream."""
+    """Yields parsed JSON objects from an SSE stream.
+
+    We use a short requests read timeout, so iter_content may raise ReadTimeout.
+    In that case, just continue waiting for more data.
+    """
     buffer = ""
     for chunk in response.iter_content(chunk_size=1024, decode_unicode=True):
+        if not chunk:
+            continue
         buffer += chunk
         
         while True:

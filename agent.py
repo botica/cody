@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -36,6 +37,8 @@ class Session:
     auto_confirm_turn: bool = False
     yolo: bool = False
     conversation: list = field(default_factory=list)
+    last_cancel_at: float = 0.0  # time.time() when a turn was cancelled via Ctrl-C
+    exiting: bool = False        # set True once we start exiting; a second Ctrl-C will hard-exit
 
     def __post_init__(self):
         if not self.conversation:
@@ -49,70 +52,89 @@ class Session:
 
 
 def run(prompt: str, session: Session) -> None:
+    """Run a single user turn.
+
+    Ctrl-C during a turn cancels the turn and returns to the user prompt.
+    The user's message is kept, but any assistant/tool messages from the cancelled
+    attempt are discarded.
+    """
     session.reset_turn()
     conversation_start = len(session.conversation)
     session.conversation.append({"role": "user", "content": prompt})
 
-    while True:
-        text, tool_calls, reasoning_details = stream_completion(session.conversation, session)
+    # Keep the user's message on cancel, discard everything else from this turn.
+    keep_upto = conversation_start + 1
 
-        # Check cost limit
-        if session.turn_cost > MAX_TURN_COST:
-            printer.limit_warning(MAX_TURN_COST)
-            session.conversation = session.conversation[:conversation_start]
-            break
+    try:
+        while True:
+            text, tool_calls, reasoning_details = stream_completion(session.conversation, session)
 
-        if not tool_calls:
+            # Check cost limit
+            if session.turn_cost > MAX_TURN_COST:
+                printer.limit_warning(MAX_TURN_COST)
+                # Keep user message, discard assistant/tool output from this attempt.
+                session.conversation = session.conversation[:keep_upto]
+                break
+
+            if not tool_calls:
+                if text:
+                    msg = {"role": "assistant", "content": text}
+                    if reasoning_details:
+                        msg["reasoning_details"] = reasoning_details
+                    session.conversation.append(msg)
+                break
+
+            def build_tool_call(tc):
+                return {
+                    "id": tc["id"],
+                    "type": "function",
+                    "function": {"name": tc["name"], "arguments": tc["arguments"]}
+                }
+
+            assistant_msg = {"role": "assistant", "tool_calls": [build_tool_call(tc) for tc in tool_calls]}
             if text:
-                msg = {"role": "assistant", "content": text}
-                if reasoning_details:
-                    msg["reasoning_details"] = reasoning_details
-                session.conversation.append(msg)
-            break
+                assistant_msg["content"] = text
+            if reasoning_details:
+                assistant_msg["reasoning_details"] = reasoning_details
+            session.conversation.append(assistant_msg)
 
-        def build_tool_call(tc):
-            return {
-                "id": tc["id"],
-                "type": "function",
-                "function": {"name": tc["name"], "arguments": tc["arguments"]}
-            }
+            denied = False
 
-        assistant_msg = {"role": "assistant", "tool_calls": [build_tool_call(tc) for tc in tool_calls]}
-        if text:
-            assistant_msg["content"] = text
-        if reasoning_details:
-            assistant_msg["reasoning_details"] = reasoning_details
-        session.conversation.append(assistant_msg)
+            for tc in tool_calls:
+                try:
+                    args = json.loads(tc.get("arguments", "{}"))
+                except json.JSONDecodeError as e:
+                    session.conversation.append({
+                        "role": "tool",
+                        "tool_call_id": tc["id"],
+                        "content": f"error: invalid JSON arguments: {e}"
+                    })
+                    continue
 
-        denied = False
-
-        for tc in tool_calls:
-            try:
-                args = json.loads(tc.get("arguments", "{}"))
-            except json.JSONDecodeError as e:
+                printer.tool_call(tc['name'], args)
+                result = execute_tool(tc["name"], args, session)
                 session.conversation.append({
                     "role": "tool",
                     "tool_call_id": tc["id"],
-                    "content": f"error: invalid JSON arguments: {e}"
+                    "content": result
                 })
-                continue
 
-            printer.tool_call(tc['name'], args)
-            result = execute_tool(tc["name"], args, session)
-            session.conversation.append({
-                "role": "tool",
-                "tool_call_id": tc["id"],
-                "content": result
-            })
+                # If the user denied the tool call, yield control back to the user prompt.
+                # This prevents the model from immediately trying again in the same turn.
+                if isinstance(result, str) and result.startswith("TOOL_DENIED"):
+                    denied = True
+                    break
 
-            # If the user denied the tool call, yield control back to the user prompt.
-            # This prevents the model from immediately trying again in the same turn.
-            if isinstance(result, str) and result.startswith("TOOL_DENIED"):
-                denied = True
+            if denied:
                 break
 
-        if denied:
-            break
+    except KeyboardInterrupt:
+        # Cancel turn mid-stream/tool execution.
+        session.last_cancel_at = time.time()
+        printer.newline()
+        print(printer.c('blue', '[turn cancelled - ctrl-c again to exit]'))
+        session.conversation = session.conversation[:keep_upto]
+        return
 
 
 def handle_model_command(cmd: str):
@@ -154,6 +176,24 @@ def get_input():
     return line, False
 
 
+def _graceful_exit(session: Session | None = None, code: int = 0) -> None:
+    """Exit.
+
+    Keep this function non-blocking.
+
+    On Windows, if a turn was cancelled with Ctrl-C, some libraries (requests,
+    ddgs, playwright, concurrent.futures) may still be cleaning up threads.
+    A subsequent Ctrl-C during Python's atexit/thread shutdown can produce noisy
+    "Exception ignored" KeyboardInterrupt tracebacks.
+
+    Without using the signal module, the most reliable way to avoid that is to
+    hard-exit (skip atexit) if we've previously cancelled a turn.
+    """
+    if session and getattr(session, "last_cancel_at", 0.0):
+        os._exit(code)
+    raise SystemExit(code)
+
+
 def main():
     parser = argparse.ArgumentParser(description="cody terminal agent")
     parser.add_argument('--cwd', '-C', default=os.getcwd(), help='Working directory')
@@ -186,9 +226,21 @@ def main():
             if prompt.strip():
                 printer.user_input(prompt, extra_lines=2 if multiline else 0)
                 run(prompt, session)
-        except (KeyboardInterrupt, EOFError):
-            print()
-            sys.exit(0)
+        except KeyboardInterrupt:
+            # At the prompt: Ctrl-C exits.
+            # If the user hits Ctrl-C again while Python is running atexit/thread cleanup,
+            # it can produce noisy "Exception ignored" tracebacks. Without using the
+            # signal module, the most reliable way to avoid that is to hard-exit on a
+            # second Ctrl-C after exit has begun.
+            printer.newline()
+            if session.exiting:
+                os._exit(0)
+            session.exiting = True
+            _graceful_exit(session, 0)
+        except EOFError:
+            printer.newline()
+            session.exiting = True
+            _graceful_exit(session, 0)
 
 
 if __name__ == "__main__":
