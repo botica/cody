@@ -243,13 +243,10 @@ def main():
             # to handle the actual exit. One Ctrl-C here just shows the hint.
             now = time.time()
             if (now - session.interrupted_at) < 0.8:
-                # Only print the hint if we haven't printed it in the last 2 seconds
-                # to prevent vertical stacking on multiple taps, and only if it
-                # wasn't the last thing printed.
-                if (now - last_hint_at) > 2.0 and not hint_printed:
+                # Only print the hint if we haven't printed it yet this turn
+                if not hint_printed:
                     sys.stdout.write("\r\033[K")
                     print(printer.c('blue', "(Ctrl-C again to exit)"))
-                    last_hint_at = now
                     hint_printed = True
                 else:
                     # Just clear the current line (^C) and stay silent
