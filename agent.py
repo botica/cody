@@ -7,6 +7,7 @@ import sys
 import time
 import signal
 from dataclasses import dataclass, field
+
 from datetime import datetime
 
 from api import stream_completion, get_model, check_config, MAX_TURN_COST, SHOW_REASONING
@@ -16,6 +17,8 @@ import config
 
 if sys.platform == 'win32':
     import io
+    import os
+    os.system('') # enables ANSI support in some windows environments
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
@@ -225,28 +228,33 @@ def main():
     setup_interrupt_handler(session)
     printer.banner("cody", get_model())
 
+    last_hint_at = 0.0
+    hint_printed = False
     while True:
         try:
             prompt, multiline = get_input()
             session.exit_requested = False
-
-            if prompt.strip() == "/clear":
-                session.conversation = [{"role": "system", "content": get_system_prompt(session.cwd)}]
-                session.token_usage = {"input": 0, "output": 0, "cost": 0.0}
-                print(printer.c('blue', "[cleared]"))
-                continue
-            if prompt.strip().startswith("/model"):
-                printer.user_input(prompt)
-                handle_model_command(prompt.strip())
-                continue
+            hint_printed = False
             if prompt.strip():
                 printer.user_input(prompt, extra_lines=2 if multiline else 0)
                 run(prompt, session)
         except KeyboardInterrupt:
-            # At the user prompt, we rely on the signal handler's double-tap (0.5s)
+            # At the user prompt, we rely on the signal handler's double-tap (0.8s)
             # to handle the actual exit. One Ctrl-C here just shows the hint.
-            if (time.time() - session.interrupted_at) > 0.5:
-                print(printer.c('blue', " (Ctrl-C again to exit)"))
+            now = time.time()
+            if (now - session.interrupted_at) < 0.8:
+                # Only print the hint if we haven't printed it in the last 2 seconds
+                # to prevent vertical stacking on multiple taps, and only if it
+                # wasn't the last thing printed.
+                if (now - last_hint_at) > 2.0 and not hint_printed:
+                    sys.stdout.write("\r\033[K")
+                    print(printer.c('blue', "(Ctrl-C again to exit)"))
+                    last_hint_at = now
+                    hint_printed = True
+                else:
+                    # Just clear the current line (^C) and stay silent
+                    sys.stdout.write("\r\033[K")
+                    sys.stdout.flush()
             session.exit_requested = True
         except EOFError:
             printer.newline()
