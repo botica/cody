@@ -5,6 +5,7 @@ import json
 import os
 import sys
 import time
+import signal
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -37,8 +38,8 @@ class Session:
     auto_confirm_turn: bool = False
     yolo: bool = False
     conversation: list = field(default_factory=list)
-    last_cancel_at: float = 0.0  # time.time() when a turn was cancelled via Ctrl-C
-    exiting: bool = False        # set True once we start exiting; a second Ctrl-C will hard-exit
+    interrupted_at: float = 0.0
+    exit_requested: bool = False
 
     def __post_init__(self):
         if not self.conversation:
@@ -52,27 +53,21 @@ class Session:
 
 
 def run(prompt: str, session: Session) -> None:
-    """Run a single user turn.
-
-    Ctrl-C during a turn cancels the turn and returns to the user prompt.
-    The user's message is kept, but any assistant/tool messages from the cancelled
-    attempt are discarded.
-    """
+    """Run a single user turn."""
     session.reset_turn()
     conversation_start = len(session.conversation)
     session.conversation.append({"role": "user", "content": prompt})
-
-    # Keep the user's message on cancel, discard everything else from this turn.
     keep_upto = conversation_start + 1
 
     try:
         while True:
+            if session.exit_requested:
+                return
+
             text, tool_calls, reasoning_details = stream_completion(session.conversation, session)
 
-            # Check cost limit
             if session.turn_cost > MAX_TURN_COST:
                 printer.limit_warning(MAX_TURN_COST)
-                # Keep user message, discard assistant/tool output from this attempt.
                 session.conversation = session.conversation[:keep_upto]
                 break
 
@@ -99,8 +94,10 @@ def run(prompt: str, session: Session) -> None:
             session.conversation.append(assistant_msg)
 
             denied = False
-
             for tc in tool_calls:
+                if session.exit_requested:
+                    break
+
                 try:
                     args = json.loads(tc.get("arguments", "{}"))
                 except json.JSONDecodeError as e:
@@ -113,27 +110,30 @@ def run(prompt: str, session: Session) -> None:
 
                 printer.tool_call(tc['name'], args)
                 result = execute_tool(tc["name"], args, session)
+
                 session.conversation.append({
                     "role": "tool",
                     "tool_call_id": tc["id"],
                     "content": result
                 })
 
-                # If the user denied the tool call, yield control back to the user prompt.
-                # This prevents the model from immediately trying again in the same turn.
                 if isinstance(result, str) and result.startswith("TOOL_DENIED"):
                     denied = True
                     break
-
             if denied:
                 break
-
     except KeyboardInterrupt:
-        # Cancel turn mid-stream/tool execution.
-        session.last_cancel_at = time.time()
-        printer.newline()
-        print(printer.c('blue', '[turn cancelled - ctrl-c again to exit]'))
+        # Check if this was the second tap of a double-tap
+        if (time.time() - session.interrupted_at) < 0.01: 
+            # The signal handler already exited the process if it was < 0.5s.
+            # If we are here, it means the signal handler raised KeyboardInterrupt.
+            # However, on some systems, the race condition might lead us here.
+            pass
+
+        # Caught if the interrupt happens while Python code is running
         session.conversation = session.conversation[:keep_upto]
+        printer.newline()
+        print(printer.c('blue', '[turn cancelled]'))
         return
 
 
@@ -189,9 +189,22 @@ def _graceful_exit(session: Session | None = None, code: int = 0) -> None:
     Without using the signal module, the most reliable way to avoid that is to
     hard-exit (skip atexit) if we've previously cancelled a turn.
     """
-    if session and getattr(session, "last_cancel_at", 0.0):
+    if session and getattr(session, "interrupted_at", 0.0):
         os._exit(code)
     raise SystemExit(code)
+
+
+def setup_interrupt_handler(session: Session):
+    def handler(signum, frame):
+        now = time.time()
+        # If the gap is less than 0.8s, it's a double-tap. Murder.
+        if 0 < (now - session.interrupted_at) < 0.8:
+            os._exit(0)
+        
+        session.interrupted_at = now
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGINT, handler)
 
 
 def main():
@@ -209,11 +222,14 @@ def main():
         sys.exit(1)
 
     session = Session(cwd=cwd, yolo=args.yolo)
+    setup_interrupt_handler(session)
     printer.banner("cody", get_model())
 
     while True:
         try:
             prompt, multiline = get_input()
+            session.exit_requested = False
+
             if prompt.strip() == "/clear":
                 session.conversation = [{"role": "system", "content": get_system_prompt(session.cwd)}]
                 session.token_usage = {"input": 0, "output": 0, "cost": 0.0}
@@ -227,19 +243,14 @@ def main():
                 printer.user_input(prompt, extra_lines=2 if multiline else 0)
                 run(prompt, session)
         except KeyboardInterrupt:
-            # At the prompt: Ctrl-C exits.
-            # If the user hits Ctrl-C again while Python is running atexit/thread cleanup,
-            # it can produce noisy "Exception ignored" tracebacks. Without using the
-            # signal module, the most reliable way to avoid that is to hard-exit on a
-            # second Ctrl-C after exit has begun.
-            printer.newline()
-            if session.exiting:
-                os._exit(0)
-            session.exiting = True
-            _graceful_exit(session, 0)
+            # At the user prompt, we rely on the signal handler's double-tap (0.5s)
+            # to handle the actual exit. One Ctrl-C here just shows the hint.
+            if (time.time() - session.interrupted_at) > 0.5:
+                print(printer.c('blue', " (Ctrl-C again to exit)"))
+            session.exit_requested = True
         except EOFError:
             printer.newline()
-            session.exiting = True
+            session.exit_requested = True
             _graceful_exit(session, 0)
 
 

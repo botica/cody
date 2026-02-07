@@ -55,20 +55,25 @@ def confirm_action(name: str, args: dict, session) -> bool | str:
 
 
 def execute_tool(name: str, args: dict, session) -> str:
-    if name in CONFIRM_TOOLS:
-        confirm_result = confirm_action(name, args, session)
-        if confirm_result is False:
-            return "TOOL_DENIED"
+    try:
+        if name in CONFIRM_TOOLS:
+            confirm_result = confirm_action(name, args, session)
+            if confirm_result is False:
+                return "TOOL_DENIED"
 
-    handler = HANDLERS.get(name)
-    if not handler:
-        return f"unknown tool: {name}"
+        handler = HANDLERS.get(name)
+        if not handler:
+            return f"unknown tool: {name}"
 
-    sig = inspect.signature(handler)
-    valid = set(sig.parameters.keys())
-    filtered = {k: v for k, v in args.items() if k in valid}
+        sig = inspect.signature(handler)
+        valid = set(sig.parameters.keys())
+        filtered = {k: v for k, v in args.items() if k in valid}
 
-    return handler(session=session, **filtered)
+        return handler(session=session, **filtered)
+    except KeyboardInterrupt:
+        raise
+    except Exception as e:
+        return f"error: {e}"
 
 
 def _resolve_in_workspace(session, user_path: str) -> str:
@@ -336,7 +341,8 @@ def web_search(query: str, backend: str = "auto", session=None) -> str:
     try:
         printer.search_query(backend, query)
         results = []
-        with DDGS() as ddgs:
+        # ddgs can be slow/blocking. we use a small timeout and check for interrupts
+        with DDGS(timeout=5) as ddgs:
             for r in ddgs.text(query, backend=backend, max_results=5):
                 title = r.get('title', '')
                 results.append((title, r.get('href', '')))
@@ -347,6 +353,8 @@ def web_search(query: str, backend: str = "auto", session=None) -> str:
             print(printer.c('blue', f'  +{len(results) - 2} more'))
         formatted = [f"- {t}\n  {u}" for t, u in results]
         return "\n\n".join(formatted) if results else "no results found"
+    except KeyboardInterrupt:
+        raise
     except Exception as e:
         return f"error: {e}"
 

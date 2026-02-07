@@ -17,7 +17,7 @@ DEFAULTS = {
         "deepseek/deepseek-r1": (0.70, 2.40),
         "openai/gpt-5.2": (1.75, 14.00),
     },
-    "max_turn_cost": 0.20,
+    "max_turn_cost": 0.66,
     "show_reasoning": True,
     "confirm_tools": {"write_file", "edit_file", "delete_file", "fetch_webpage", "web_search", "run_bash"},
     "file_size_limit": 10_000_000,
