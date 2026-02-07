@@ -16,6 +16,8 @@ DEFAULTS = {
         "z-ai/glm-4.7": (0.40, 1.50),
         "deepseek/deepseek-r1": (0.70, 2.40),
         "openai/gpt-5.2": (1.75, 14.00),
+        "moonshotai/kimi-k2.5": (0.45, 2.25),
+        "anthropic/claude-opus-4.6": (5.00, 25.00),
     },
     "max_turn_cost": 0.66,
     "show_reasoning": True,
