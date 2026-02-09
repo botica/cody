@@ -235,6 +235,18 @@ def main():
             prompt, multiline = get_input()
             session.exit_requested = False
             hint_printed = False
+
+            if prompt.strip() == "/clear":
+                session.conversation = [{"role": "system", "content": get_system_prompt(session.cwd)}]
+                session.token_usage = {"input": 0, "output": 0, "cost": 0.0}
+                print(printer.c('blue', "[cleared]"))
+                continue
+
+            if prompt.strip().startswith("/model") or prompt.strip().startswith("/models"):
+                printer.user_input(prompt)
+                handle_model_command(prompt.strip())
+                continue
+
             if prompt.strip():
                 printer.user_input(prompt, extra_lines=2 if multiline else 0)
                 run(prompt, session)
