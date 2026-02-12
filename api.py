@@ -38,7 +38,7 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
         # but we don't fail the request if the server takes a moment before
         # sending the first streaming chunk.
         # (connect timeout, read timeout)
-        response = requests.post(OPENROUTER_URL, headers=headers, json=payload, stream=True, timeout=(10, 10))
+        response = requests.post(OPENROUTER_URL, headers=headers, json=payload, stream=True, timeout=(10, 60))
     except requests.exceptions.RequestException as e:
         printer.error(f"connection failed: {e}")
         return "", [], None
