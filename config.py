@@ -18,6 +18,7 @@ DEFAULTS = {
         "openai/gpt-5.2": (1.75, 14.00),
         "moonshotai/kimi-k2.5": (0.45, 2.25),
         "anthropic/claude-opus-4.6": (5.00, 25.00),
+        "anthropic/claude-sonnet-4.6": (3.00, 15.00),
     },
     "max_turn_cost": 0.66,
     "show_reasoning": True,
