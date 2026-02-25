@@ -1,6 +1,7 @@
 """Print formatting and colors for cody"""
 
 import difflib
+import re
 
 SNIPPET_LEN = 80
 
@@ -65,27 +66,38 @@ def _edit_file_preview(args: dict):
         _show_diff_lines(old_string.splitlines(), new_string.splitlines())
 
 
+def _tokenize(text: str) -> list[str]:
+    """Split a line into word/non-word tokens, preserving all characters."""
+    return re.findall(r'\w+|\W+', text)
+
+
 def _intra_line_highlight(old_text: str, new_text: str) -> tuple[str, str]:
     """Return (old_rendered, new_rendered) with intra-line changed spans highlighted.
 
-    Unchanged chars on the old line use 'dim', changed chars use 'del_hl'.
-    Unchanged chars on the new line use 'lavender', changed chars use 'add_hl'.
+    Diffs at the token (word) level. For a 1-to-1 word replacement where the two
+    words are similar enough, drops down to char-level to highlight only the changed
+    characters. Otherwise the whole changed token is highlighted as a unit.
+
+    Unchanged tokens use the base color ('dim' / 'lavender').
+    Changed tokens use the highlight color ('del_hl' / 'add_hl').
     """
-    # Use SequenceMatcher on character sequences for fine-grained diff
-    sm = difflib.SequenceMatcher(None, old_text, new_text, autojunk=False)
+    old_tokens = _tokenize(old_text)
+    new_tokens = _tokenize(new_text)
+    sm = difflib.SequenceMatcher(None, old_tokens, new_tokens, autojunk=False)
     old_out, new_out = [], []
 
     for tag, i1, i2, j1, j2 in sm.get_opcodes():
-        old_span = old_text[i1:i2]
-        new_span = new_text[j1:j2]
+        old_chunk = old_tokens[i1:i2]
+        new_chunk = new_tokens[j1:j2]
         if tag == 'equal':
-            old_out.append(c('dim', old_span))
-            new_out.append(c('lavender', new_span))
+            old_out.append(c('dim', ''.join(old_chunk)))
+            new_out.append(c('lavender', ''.join(new_chunk)))
         else:
-            if old_span:
-                old_out.append(c('del_hl', old_span))
-            if new_span:
-                new_out.append(c('add_hl', new_span))
+            # Any change (replace/insert/delete) — highlight the whole token as a unit
+            for tok in old_chunk:
+                old_out.append(c('del_hl', tok))
+            for tok in new_chunk:
+                new_out.append(c('add_hl', tok))
 
     return ''.join(old_out), ''.join(new_out)
 
