@@ -2,8 +2,21 @@
   <img src="./imgs/cody.png" width="128px">
 </div>
 <p>cody is a cl agent harnessing openrouter models</p>
-<p>cody has these tools: read_file, list_directory, write_file, edit_file, delete_file, search, fetch_webpage, web_search, and run_bash</p>
+cody has these tools:
+- `read_file`
+- `list_directory`
+- `write_file`
+- `edit_file`
+- `delete_file`
+- `search`
+- `fetch_webpage`
+- `web_search`
+- `run_bash`
 <p>run as <code>python agent.py</code> after installing the dependencies in requirements.txt as well as <a href="https://github.com/BurntSushi/ripgrep">ripgrep</a></p>
+
+```
+pip install -r requirements.txt
+```
 
 ### commands
 - `/model` - list available models, and switch models  `/model <n>`
@@ -11,12 +24,12 @@
 - `---` - enter this delimeter on its own line to paste in multiple lines at a time. then enter it again to stop.
 - `ctrl-c`
   - during turn: cancel turn
-  - at user prompt: exit program
+  - double tap: quit (like Claude)
 
 ### confirmations
-most tools require `y/n` confirmation. special inputs:
+some tools require `y/n` confirmation. special inputs:
 - `!` - auto-confirm for rest of turn
-- `n` - deny the tool call and yield back to the input prompt
+- `n` - deny the tool call and yield back to input prompt
 
 ### flags
 - `--yolo` - skip all confirmations for the session
