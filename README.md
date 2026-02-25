@@ -2,6 +2,7 @@
   <img src="./imgs/cody.png" width="128px">
 </div>
 <p>cody is a cl agent harnessing openrouter models</p>
+
 cody has these tools:
 - `read_file`
 - `list_directory`
