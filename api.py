@@ -110,14 +110,68 @@ def stream_completion(conversation: list, session) -> tuple[str, list[dict], dic
     return current_text, list(tool_calls_by_index.values()), reasoning_details
 
 
+def _is_anthropic_model(model: str) -> bool:
+    """Return True if the model is an Anthropic/Claude model that supports prompt caching."""
+    return model.startswith("anthropic/")
+
+
+def _apply_anthropic_cache_control(messages: list) -> list:
+    """Return a copy of messages with cache_control breakpoints injected for Anthropic models.
+
+    Strategy (per OpenRouter docs):
+      - System message: cache the entire static system prompt (it never changes).
+      - Last user message: cache up to the latest user turn so the model can reuse
+        the full conversation context on follow-up tool calls within the same turn.
+
+    Only up to 4 cache_control breakpoints are allowed by Anthropic.
+    """
+    import copy
+    messages = copy.deepcopy(messages)
+
+    cache_control = {"type": "ephemeral"}
+
+    # 1. Cache the system message (index 0)
+    if messages and messages[0].get("role") == "system":
+        content = messages[0].get("content", "")
+        if isinstance(content, str):
+            # Wrap in multipart array so we can attach cache_control to the text part
+            messages[0]["content"] = [{"type": "text", "text": content, "cache_control": cache_control}]
+        elif isinstance(content, list) and content:
+            # Already multipart — attach to the last text part
+            for part in reversed(content):
+                if part.get("type") == "text":
+                    part["cache_control"] = cache_control
+                    break
+
+    # 2. Cache the last user message (marks the boundary of stable context)
+    for i in range(len(messages) - 1, -1, -1):
+        if messages[i].get("role") == "user":
+            content = messages[i].get("content", "")
+            if isinstance(content, str):
+                messages[i]["content"] = [{"type": "text", "text": content, "cache_control": cache_control}]
+            elif isinstance(content, list) and content:
+                for part in reversed(content):
+                    if part.get("type") == "text":
+                        part["cache_control"] = cache_control
+                        break
+            break
+
+    return messages
+
+
 def _prepare_request_data(conversation: list) -> tuple[dict, dict]:
     headers = {
         "Authorization": f"Bearer {config.API_KEY}",
         "Content-Type": "application/json"
     }
+
+    messages = conversation
+    if _is_anthropic_model(config.MODEL):
+        messages = _apply_anthropic_cache_control(conversation)
+
     payload = {
         "model": config.MODEL,
-        "messages": conversation,
+        "messages": messages,
         "tools": get_tools_schema(),
         "stream": True,
         "stream_options": {"include_usage": True}
@@ -192,6 +246,12 @@ def _print_usage(call_usage: dict, session):
     session.turn_tokens_in += inp
     session.turn_tokens_out += out
 
+    # Extract Anthropic prompt-cache metrics from prompt_tokens_details
+    token_details = call_usage.get("prompt_tokens_details") or {}
+    cached_tokens = token_details.get("cached_tokens", 0)
+    cache_write_tokens = token_details.get("cache_write_tokens", 0)
+    is_anthropic = _is_anthropic_model(config.MODEL)
+
     pricing = config.MODEL_PRICING.get(config.MODEL)
     if pricing:
         call_cost = (inp * pricing[0] + out * pricing[1]) / 1_000_000
@@ -199,8 +259,12 @@ def _print_usage(call_usage: dict, session):
         session.turn_cost += call_cost
         printer.usage(inp, out, call_cost,
                       session.turn_tokens_in, session.turn_tokens_out, session.turn_cost,
-                      session.token_usage['input'], session.token_usage['output'], session.token_usage['cost'])
+                      session.token_usage['input'], session.token_usage['output'], session.token_usage['cost'],
+                      cached_tokens=cached_tokens, cache_write_tokens=cache_write_tokens,
+                      show_cache=is_anthropic)
     else:
         printer.usage(inp, out, None,
                       session.turn_tokens_in, session.turn_tokens_out, None,
-                      session.token_usage['input'], session.token_usage['output'], None)
+                      session.token_usage['input'], session.token_usage['output'], None,
+                      cached_tokens=cached_tokens, cache_write_tokens=cache_write_tokens,
+                      show_cache=is_anthropic)

@@ -259,13 +259,19 @@ def separator():
 
 def usage(call_in: int, call_out: int, call_cost: float | None,
           turn_in: int, turn_out: int, turn_cost: float | None,
-          sess_in: int, sess_out: int, sess_cost: float | None):
+          sess_in: int, sess_out: int, sess_cost: float | None,
+          cached_tokens: int = 0, cache_write_tokens: int = 0, show_cache: bool = False):
     """Print token usage stats."""
     if call_cost is not None:
         msg = f"[tokens] call: {call_in:,}i/{call_out:,}o ${call_cost:.4f}|turn: {turn_in:,}i/{turn_out:,}o ${turn_cost:.4f}|session: {sess_in:,}i/{sess_out:,}o ${sess_cost:.4f}"
     else:
         msg = f"[tokens] call: {call_in:,}i/{call_out:,}o|turn: {turn_in:,}i/{turn_out:,}o|session: {sess_in:,}i/{sess_out:,}o"
     print(c('blue', msg))
+    if show_cache:
+        if cache_write_tokens or cached_tokens:
+            print(c('blue', f"[cache] wrote {cache_write_tokens:,} tokens, hit {cached_tokens:,} tokens"))
+        else:
+            print(c('blue', f"[cache] no cache activity"))
 
 
 def config_error():
