@@ -1,5 +1,7 @@
 """Print formatting and colors for cody"""
 
+import difflib
+
 SNIPPET_LEN = 80
 
 # ANSI 256-color codes
@@ -7,10 +9,10 @@ COLORS = {
     "reset": "\033[0m",
     "blue": "\033[38;5;75m",
     "lavender": "\033[38;5;183m",
-    "dim": "\033[48;5;233m\033[38;5;23m",  # dark grey bg, teal text
-    "highlight": "\033[48;5;23m\033[38;5;255m",  # teal bg, white text
-    "del": "\033[48;5;234m\033[38;5;23m",  # teal text, grey bg
-    "add": "\033[48;5;235m\033[38;5;183m",  # lighter grey bg, lavender text
+    "dim": "\033[48;5;233m\033[38;5;23m",      # dark grey bg, teal text
+    "highlight": "\033[48;5;23m\033[38;5;255m", # teal bg, white text
+    "del_hl": "\033[48;5;236m\033[38;5;23m",    # slightly lighter grey bg, same teal text (changed chars on - lines)
+    "add_hl": "\033[48;5;236m\033[38;5;183m",   # slightly lighter grey bg, same lavender text (changed chars on + lines)
 }
 
 def c(color: str, text: str) -> str:
@@ -23,37 +25,155 @@ def _edit_file_preview(args: dict):
     path = args.get('path', '')
     old_string = args.get('old_string', '')
     new_string = args.get('new_string', '')
-    start_line = None
-    ctx_before = ctx_after = None
-    old_lines = new_lines = None
+
+    print(f"{c('blue', '[edit_file]')} {c('blue', path)}")
+
+    # Append-only: no old_string
+    if not old_string:
+        for line in new_string.splitlines()[:5]:
+            print(f"  {c('lavender', f'     +  {line[:SNIPPET_LEN]}')}")
+        extra = new_string.count('\n') + 1 - 5
+        if extra > 0:
+            print(f"  {c('blue', f'     ... +{extra} more lines')}")
+        return
+
     try:
         with open(path, 'r', encoding='utf-8') as f:
             content = f.read()
-        # Find the correct occurrence (1-indexed), default to first
+
+        # Find the target occurrence (1-indexed, default first)
         occurrence = args.get('occurrence', 1) or 1
-        idx = -1
-        search_start = 0
+        idx, search_start = -1, 0
         for _ in range(occurrence):
             idx = content.find(old_string, search_start)
             if idx == -1:
                 break
             search_start = idx + 1
-        if idx >= 0:
-            start_line = content[:idx].count('\n') + 1
-            end_line = start_line + old_string.count('\n')
-            lines = content.splitlines()
-            old_lines = '\n'.join(lines[start_line - 1:end_line])
-            new_lines = old_lines.replace(old_string, new_string, 1)
-            if start_line > 1:
-                ctx_before = lines[start_line - 2]
-            if end_line < len(lines):
-                ctx_after = lines[end_line]
+
+        if idx == -1:
+            # old_string not in file — just show raw strings
+            _show_diff_lines(old_string.splitlines(), new_string.splitlines())
+            return
+
+        start_line = content[:idx].count('\n') + 1  # 1-indexed
+        new_content = content[:idx] + new_string + content[idx + len(old_string):]
+
+        _show_unified_diff(content, new_content, start_line)
+
     except Exception as e:
-        print(c('blue', f'[edit_file] failed to read {path}: {e}'))
-        old_lines, new_lines = old_string, new_string
-    edit_diff(path, old_lines or old_string, new_lines or new_string,
-              start_line=start_line, ctx_before=ctx_before, ctx_after=ctx_after,
-              old_fragment=old_string, new_fragment=new_string)
+        print(c('blue', f'  (preview unavailable: {e})'))
+        _show_diff_lines(old_string.splitlines(), new_string.splitlines())
+
+
+def _intra_line_highlight(old_text: str, new_text: str) -> tuple[str, str]:
+    """Return (old_rendered, new_rendered) with intra-line changed spans highlighted.
+
+    Unchanged chars on the old line use 'dim', changed chars use 'del_hl'.
+    Unchanged chars on the new line use 'lavender', changed chars use 'add_hl'.
+    """
+    # Use SequenceMatcher on character sequences for fine-grained diff
+    sm = difflib.SequenceMatcher(None, old_text, new_text, autojunk=False)
+    old_out, new_out = [], []
+
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        old_span = old_text[i1:i2]
+        new_span = new_text[j1:j2]
+        if tag == 'equal':
+            old_out.append(c('dim', old_span))
+            new_out.append(c('lavender', new_span))
+        else:
+            if old_span:
+                old_out.append(c('del_hl', old_span))
+            if new_span:
+                new_out.append(c('add_hl', new_span))
+
+    return ''.join(old_out), ''.join(new_out)
+
+
+def _render_changed_pairs(minus_lines: list[str], plus_lines: list[str]) -> list[str]:
+    """Pair up - and + lines and apply intra-line highlighting. Returns ready-to-print strings."""
+    out = []
+    pairs = min(len(minus_lines), len(plus_lines))
+    for i in range(pairs):
+        old_hl, new_hl = _intra_line_highlight(minus_lines[i], plus_lines[i])
+        out.append(f"  {c('dim', '     -  ')}{old_hl}")
+        out.append(f"  {c('lavender', '     +  ')}{new_hl}")
+    # Any unmatched leftover lines (length mismatch) get plain coloring
+    for line in minus_lines[pairs:]:
+        out.append(f"  {c('dim', f'     -  {line[:SNIPPET_LEN]}')}")
+    for line in plus_lines[pairs:]:
+        out.append(f"  {c('lavender', f'     +  {line[:SNIPPET_LEN]}')}")
+    return out
+
+
+def _show_unified_diff(old_content: str, new_content: str, start_line: int, context: int = 2):
+    """Render a compact unified diff of the changed region, capped at max_lines shown."""
+    old_lines = old_content.splitlines(keepends=True)
+    new_lines = new_content.splitlines(keepends=True)
+
+    hunks = list(difflib.unified_diff(
+        old_lines, new_lines,
+        n=context, lineterm='',
+    ))
+    if not hunks:
+        print(f"  {c('blue', '(no changes)')}")
+        return
+
+    # First pass: collect hunk lines, grouping consecutive - and + runs for pairing
+    # We buffer pending minus lines, then flush when we hit a non-plus line.
+    shown = 0
+    max_lines = 20
+    pending_minus: list[str] = []
+    pending_plus: list[str] = []
+
+    def flush_pending():
+        nonlocal shown
+        for rendered in _render_changed_pairs(pending_minus, pending_plus):
+            if shown >= max_lines:
+                return
+            print(rendered)
+            shown += 1
+        pending_minus.clear()
+        pending_plus.clear()
+
+    for line in hunks[2:]:  # skip --- / +++ header lines
+        if shown >= max_lines:
+            print(f"  {c('blue', '     ... diff truncated')}")
+            break
+        tag, text = line[0], line[1:].rstrip()
+        if tag == '-':
+            # Flush any accumulated plus lines first (shouldn't normally happen in unified diff,
+            # but be safe), then buffer this minus line
+            if pending_plus:
+                flush_pending()
+            pending_minus.append(text)
+        elif tag == '+':
+            pending_plus.append(text)
+        else:
+            flush_pending()
+            if shown >= max_lines:
+                print(f"  {c('blue', '     ... diff truncated')}")
+                break
+            if tag == '@':
+                try:
+                    hunk_info = line.split('@@')[1].strip()
+                    old_start = int(hunk_info.split()[0].lstrip('-').split(',')[0])
+                    new_start = int(hunk_info.split()[1].lstrip('+').split(',')[0])
+                    offset = start_line - 1
+                    print(c('blue', f'  @@ -{old_start + offset} +{new_start + offset} @@'))
+                except Exception:
+                    print(c('blue', f'  {line.rstrip()}'))
+            else:
+                print(f"  {c('blue', f'        {text[:SNIPPET_LEN]}')}")
+            shown += 1
+
+    flush_pending()
+
+
+def _show_diff_lines(old_lines: list[str], new_lines: list[str]):
+    """Fallback: just show - / + lines without file context."""
+    for rendered in _render_changed_pairs(old_lines[:10], new_lines[:10]):
+        print(rendered)
 
 
 def tool_call(name: str, args: dict | str = None):
@@ -74,92 +194,6 @@ def tool_call(name: str, args: dict | str = None):
 def tool_path(name: str, path: str):
     """Print a tool call with a path."""
     print(f"{c('blue', f'[{name}]')} {c('blue', path)}")
-
-
-def edit_diff(path: str, old: str, new: str, max_lines: int = 5, start_line: int = None,
-              ctx_before: str = None, ctx_after: str = None,
-              old_fragment: str = None, new_fragment: str = None):
-    """Print an edit_file diff preview with context and highlighted changes."""
-    print(f"{c('blue', '[edit_file]')} {c('blue', path)}")
-
-    def show_ctx(line_num: int, text: str):
-        if text is not None:
-            print(f"  {c('blue', f'{line_num:4}   {text[:SNIPPET_LEN]}')}")
-
-    def highlight_line(line: str, fragment: str, base_color: str, hl_color: str):
-        """Highlight fragment within line using hl_color, rest in base_color."""
-        if not fragment or fragment not in line:
-            return c(base_color, line[:SNIPPET_LEN])
-
-        idx = line.find(fragment)
-        frag_len = len(fragment)
-
-        # Center the window on the middle of the fragment
-        frag_center = idx + frag_len // 2
-        start = max(0, frag_center - SNIPPET_LEN // 2)
-        end = start + SNIPPET_LEN
-
-        # Adjust if we hit the end of the line
-        if end > len(line):
-            end = len(line)
-            start = max(0, end - SNIPPET_LEN)
-
-        trunc = line[start:end]
-
-        # Recalculate index in truncated view
-        new_idx = idx - start
-        frag_end = min(new_idx + frag_len, len(trunc))
-        before = trunc[:new_idx] if new_idx > 0 else ''
-        frag = trunc[new_idx:frag_end]
-        after = trunc[frag_end:]
-
-        # Build the result with ellipsis for context
-        prefix = c(base_color, '...') if start > 0 else ''
-        suffix = c(base_color, '...') if end < len(line) else ''
-        return prefix + c(base_color, before) + c(hl_color, frag) + c(base_color, after) + suffix
-
-    def show_lines(text: str, prefix: str, base_color: str, hl_color: str, fragment: str, line_num: int = None):
-        lines = text.splitlines() if text else []
-        total = len(lines)
-
-        if not lines or not any(l.strip() for l in lines):
-            if total > 0:
-                print(f"  {c(base_color, f'     {prefix} ({total} empty lines)')}")
-            return
-
-        # Track which lines contain the fragment (for multiline fragments)
-        frag_lines = fragment.splitlines() if fragment else []
-        frag_idx = 0
-
-        shown = 0
-        for i, line in enumerate(lines):
-            if shown >= max_lines:
-                break
-            ln = f"{line_num + i:4} " if line_num else "     "
-            # Find if this line has part of the fragment
-            frag_part = frag_lines[frag_idx] if frag_idx < len(frag_lines) else None
-            highlighted = highlight_line(line, frag_part, base_color, hl_color) if line else ""
-            print(f"  {c(base_color, f'{ln}{prefix} ')}{highlighted}")
-            if frag_part and frag_part in line:
-                frag_idx += 1
-            shown += 1
-
-        remaining = total - shown
-        if remaining > 0:
-            print(f"  {c('blue', f'     ... +{remaining} more lines')}")
-
-    # Context before
-    if ctx_before is not None and start_line:
-        show_ctx(start_line - 1, ctx_before)
-
-    if old:
-        show_lines(old, '-', 'dim', 'del', old_fragment, start_line)
-    show_lines(new, '+', 'lavender', 'add', new_fragment, start_line)
-
-    # Context after
-    if ctx_after is not None and start_line:
-        end_line = start_line + max(old.count('\n'), new.count('\n'))
-        show_ctx(end_line + 1, ctx_after)
 
 
 def write_preview(path: str, content: str):
