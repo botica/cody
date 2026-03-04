@@ -67,16 +67,17 @@ def _edit_file_preview(args: dict):
 
 
 def _tokenize(text: str) -> list[str]:
-    """Split a line into word/non-word tokens, preserving all characters."""
-    return re.findall(r'\w+|\W+', text)
+    """Split a line into word/non-word tokens, preserving all characters.
+    Non-word characters are kept as individual tokens so that spaces between
+    changed words get caught by the diff rather than left unhighlighted."""
+    return re.findall(r'\w+|\W', text)
 
 
 def _intra_line_highlight(old_text: str, new_text: str) -> tuple[str, str]:
     """Return (old_rendered, new_rendered) with intra-line changed spans highlighted.
 
-    Diffs at the token (word) level. For a 1-to-1 word replacement where the two
-    words are similar enough, drops down to char-level to highlight only the changed
-    characters. Otherwise the whole changed token is highlighted as a unit.
+    Diffs at the token (word) level. Small equal-whitespace islands between changed
+    spans are absorbed into the highlight so there are no naked gaps.
 
     Unchanged tokens use the base color ('dim' / 'lavender').
     Changed tokens use the highlight color ('del_hl' / 'add_hl').
@@ -84,9 +85,26 @@ def _intra_line_highlight(old_text: str, new_text: str) -> tuple[str, str]:
     old_tokens = _tokenize(old_text)
     new_tokens = _tokenize(new_text)
     sm = difflib.SequenceMatcher(None, old_tokens, new_tokens, autojunk=False)
-    old_out, new_out = [], []
+    opcodes = sm.get_opcodes()
 
-    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+    # Absorb tiny equal gaps (pure whitespace, or <= 1 token) that sit between
+    # two changed ops on both sides — they just look like naked holes otherwise.
+    merged = []
+    for op in opcodes:
+        tag, i1, i2, j1, j2 = op
+        if (tag == 'equal'
+                and merged and merged[-1][0] != 'equal'
+                and ''.join(old_tokens[i1:i2]).strip() == ''):
+            # Peek ahead: is there another changed op coming?
+            idx = opcodes.index(op)
+            if idx + 1 < len(opcodes) and opcodes[idx + 1][0] != 'equal':
+                # Re-tag as replace so it gets highlighted with its neighbours
+                merged.append(('replace', i1, i2, j1, j2))
+                continue
+        merged.append(op)
+
+    old_out, new_out = [], []
+    for tag, i1, i2, j1, j2 in merged:
         old_chunk = old_tokens[i1:i2]
         new_chunk = new_tokens[j1:j2]
         if tag == 'equal':
