@@ -179,6 +179,20 @@ def get_input():
     return line, False
 
 
+def _close_browser(session: Session) -> None:
+    """Shut down the persistent Playwright browser if one was opened."""
+    if getattr(session, '_browser', None):
+        try:
+            session._browser.close()
+        except Exception:
+            pass
+    if getattr(session, '_playwright', None):
+        try:
+            session._playwright.stop()
+        except Exception:
+            pass
+
+
 def _graceful_exit(session: Session | None = None, code: int = 0) -> None:
     """Exit.
 
@@ -192,6 +206,8 @@ def _graceful_exit(session: Session | None = None, code: int = 0) -> None:
     Without using the signal module, the most reliable way to avoid that is to
     hard-exit (skip atexit) if we've previously cancelled a turn.
     """
+    if session:
+        _close_browser(session)
     if session and getattr(session, "interrupted_at", 0.0):
         os._exit(code)
     raise SystemExit(code)

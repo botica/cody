@@ -12,7 +12,6 @@ from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 import trafilatura
 from ddgs import DDGS
-from playwright.sync_api import sync_playwright
 
 import printer
 import config
@@ -99,6 +98,17 @@ def _resolve_in_workspace(session, user_path: str) -> str:
         raise PermissionError(f"path escapes workspace: {user_path}")
 
     return str(resolved)
+
+#helpers (browser)
+def _get_browser(session):
+    """Return a persistent Playwright browser attached to the session, launching it if needed."""
+    if getattr(session, '_playwright', None) is None:
+        from playwright.sync_api import sync_playwright
+        pw = sync_playwright().start()
+        session._playwright = pw
+        session._browser = pw.firefox.launch(headless=True)
+    return session._browser
+
 
 #begin tool functions
 def read_file(path: str, offset=None, limit=None, session=None) -> str:
@@ -305,15 +315,17 @@ def fetch_webpage(url: str, use_browser: bool = False, session=None) -> str:
         printer.fetch_preview(text)
         return text
 
+        
     def with_browser():
         printer.fetch_browser_start()
-        with sync_playwright() as p:
-            browser = p.firefox.launch(headless=True)
-            page = browser.new_page()
+        browser = _get_browser(session)
+        page = browser.new_page()
+        try:
             page.goto(url, timeout=30000)
             page.wait_for_load_state("load")
             html = page.content()
-            browser.close()
+        finally:
+            page.close()
         printer.fetch_browser_done()
         raw_len = len(html)
         text, method = extract(html)
