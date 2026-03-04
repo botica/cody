@@ -102,19 +102,28 @@ def _intra_line_highlight(old_text: str, new_text: str) -> tuple[str, str]:
     return ''.join(old_out), ''.join(new_out)
 
 
-def _render_changed_pairs(minus_lines: list[str], plus_lines: list[str]) -> list[str]:
-    """Pair up - and + lines and apply intra-line highlighting. Returns ready-to-print strings."""
+def _render_changed_pairs(minus_lines: list[str], plus_lines: list[str],
+                          old_line_no: int = 0, new_line_no: int = 0) -> list[str]:
+    """Pair up - and + lines and apply intra-line highlighting. Returns ready-to-print strings.
+
+    old_line_no / new_line_no are the 1-indexed file line numbers for the first
+    element of minus_lines / plus_lines respectively (0 means unknown → no number shown).
+    """
     out = []
     pairs = min(len(minus_lines), len(plus_lines))
     for i in range(pairs):
         old_hl, new_hl = _intra_line_highlight(minus_lines[i], plus_lines[i])
-        out.append(f"  {c('dim', '     -  ')}{old_hl}")
-        out.append(f"  {c('lavender', '     +  ')}{new_hl}")
+        old_num = f"{old_line_no + i:>4}" if old_line_no else "    "
+        new_num = f"{new_line_no + i:>4}" if new_line_no else "    "
+        out.append(f"  {c('dim', f'{old_num} -  ')}{old_hl}")
+        out.append(f"  {c('lavender', f'{new_num} +  ')}{new_hl}")
     # Any unmatched leftover lines (length mismatch) get plain coloring
-    for line in minus_lines[pairs:]:
-        out.append(f"  {c('dim', f'     -  {line[:SNIPPET_LEN]}')}")
-    for line in plus_lines[pairs:]:
-        out.append(f"  {c('lavender', f'     +  {line[:SNIPPET_LEN]}')}")
+    for j, line in enumerate(minus_lines[pairs:]):
+        old_num = f"{old_line_no + pairs + j:>4}" if old_line_no else "    "
+        out.append(f"  {c('dim', f'{old_num} -  {line[:SNIPPET_LEN]}')}")
+    for j, line in enumerate(plus_lines[pairs:]):
+        new_num = f"{new_line_no + pairs + j:>4}" if new_line_no else "    "
+        out.append(f"  {c('lavender', f'{new_num} +  {line[:SNIPPET_LEN]}')}")
     return out
 
 
@@ -138,9 +147,18 @@ def _show_unified_diff(old_content: str, new_content: str, start_line: int, cont
     pending_minus: list[str] = []
     pending_plus: list[str] = []
 
+    # Running line-number cursors (1-indexed, offset-adjusted to real file lines)
+    offset = start_line - 1
+    cur_old = 0  # current old-file line number (set when we parse a @@ header)
+    cur_new = 0  # current new-file line number
+    # Track where each pending batch started so we can pass numbers to _render_changed_pairs
+    batch_old_start = 0
+    batch_new_start = 0
+
     def flush_pending():
         nonlocal shown
-        for rendered in _render_changed_pairs(pending_minus, pending_plus):
+        for rendered in _render_changed_pairs(
+                pending_minus, pending_plus, batch_old_start, batch_new_start):
             if shown >= max_lines:
                 return
             print(rendered)
@@ -158,9 +176,15 @@ def _show_unified_diff(old_content: str, new_content: str, start_line: int, cont
             # but be safe), then buffer this minus line
             if pending_plus:
                 flush_pending()
+            if not pending_minus:
+                batch_old_start = cur_old  # record where this batch starts
             pending_minus.append(text)
+            cur_old += 1
         elif tag == '+':
+            if not pending_plus:
+                batch_new_start = cur_new  # record where this batch starts
             pending_plus.append(text)
+            cur_new += 1
         else:
             flush_pending()
             if shown >= max_lines:
@@ -171,12 +195,18 @@ def _show_unified_diff(old_content: str, new_content: str, start_line: int, cont
                     hunk_info = line.split('@@')[1].strip()
                     old_start = int(hunk_info.split()[0].lstrip('-').split(',')[0])
                     new_start = int(hunk_info.split()[1].lstrip('+').split(',')[0])
-                    offset = start_line - 1
-                    print(c('blue', f'  @@ -{old_start + offset} +{new_start + offset} @@'))
+                    cur_old = old_start + offset
+                    cur_new = new_start + offset
+                    print(c('blue', f'  @@ -{cur_old} +{cur_new} @@'))
                 except Exception:
                     print(c('blue', f'  {line.rstrip()}'))
             else:
-                print(f"  {c('blue', f'        {text[:SNIPPET_LEN]}')}")
+                # Context line — show with line numbers on both sides
+                old_num = f"{cur_old:>4}" if cur_old else "    "
+                new_num = f"{cur_new:>4}" if cur_new else "    "
+                print(f"  {c('blue', f'{old_num}    {text[:SNIPPET_LEN]}')}")
+                cur_old += 1
+                cur_new += 1
             shown += 1
 
     flush_pending()
