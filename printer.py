@@ -90,13 +90,12 @@ def _intra_line_highlight(old_text: str, new_text: str) -> tuple[str, str]:
     # Absorb tiny equal gaps (pure whitespace, or <= 1 token) that sit between
     # two changed ops on both sides — they just look like naked holes otherwise.
     merged = []
-    for op in opcodes:
+    for idx, op in enumerate(opcodes):
         tag, i1, i2, j1, j2 = op
         if (tag == 'equal'
                 and merged and merged[-1][0] != 'equal'
                 and ''.join(old_tokens[i1:i2]).strip() == ''):
             # Peek ahead: is there another changed op coming?
-            idx = opcodes.index(op)
             if idx + 1 < len(opcodes) and opcodes[idx + 1][0] != 'equal':
                 # Re-tag as replace so it gets highlighted with its neighbours
                 merged.append(('replace', i1, i2, j1, j2))
@@ -130,7 +129,7 @@ def _render_changed_pairs(minus_lines: list[str], plus_lines: list[str],
     out = []
     pairs = min(len(minus_lines), len(plus_lines))
     for i in range(pairs):
-        old_hl, new_hl = _intra_line_highlight(minus_lines[i], plus_lines[i])
+        old_hl, new_hl = _intra_line_highlight(minus_lines[i][:SNIPPET_LEN], plus_lines[i][:SNIPPET_LEN])
         old_num = f"{old_line_no + i:>4}" if old_line_no else "    "
         new_num = f"{new_line_no + i:>4}" if new_line_no else "    "
         out.append(f"  {c('dim', f'{old_num} -  ')}{old_hl}")
@@ -178,6 +177,9 @@ def _show_unified_diff(old_content: str, new_content: str, start_line: int, cont
         for rendered in _render_changed_pairs(
                 pending_minus, pending_plus, batch_old_start, batch_new_start):
             if shown >= max_lines:
+                print(f"  {c('blue', '     ... diff truncated')}")
+                pending_minus.clear()
+                pending_plus.clear()
                 return
             print(rendered)
             shown += 1
@@ -225,7 +227,7 @@ def _show_unified_diff(old_content: str, new_content: str, start_line: int, cont
                 print(f"  {c('blue', f'{old_num}    {text[:SNIPPET_LEN]}')}")
                 cur_old += 1
                 cur_new += 1
-            shown += 1
+                shown += 1
 
     flush_pending()
 
