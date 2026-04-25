@@ -317,8 +317,10 @@ def fetch_webpage(url: str, use_browser: bool = False, session=None) -> str:
 
         
     def with_browser():
-        printer.fetch_browser_start()
+        already_open = getattr(session, '_browser', None) is not None
         browser = _get_browser(session)
+        if not already_open:
+            printer.fetch_browser_start()
         page = browser.new_page()
         try:
             page.goto(url, timeout=30000)
