@@ -27,7 +27,8 @@ def get_system_prompt(cwd: str) -> str:
     return config.SYSTEM_PROMPT_TEMPLATE.format(
         cwd=cwd,
         platform=sys.platform,
-        date=datetime.now().strftime('%Y-%m-%d')
+        date=datetime.now().strftime('%Y-%m-%d'),
+        time=datetime.now().strftime('%H:%M')
     )
 
 
@@ -59,6 +60,9 @@ def run(prompt: str, session: Session) -> None:
     """Run a single user turn."""
     session.reset_turn()
     conversation_start = len(session.conversation)
+    # Refresh system prompt so the model always has the current time
+    if session.conversation and session.conversation[0]["role"] == "system":
+        session.conversation[0]["content"] = get_system_prompt(session.cwd)
     session.conversation.append({"role": "user", "content": prompt})
     keep_upto = conversation_start + 1
 

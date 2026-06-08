@@ -37,7 +37,8 @@ Use your knowledge for basic facts. Only search for current events, real-time da
 Environment:
 - Working directory: {cwd}
 - Platform: {platform}
-- Date: {date}""",
+- Date: {date}
+- Time: {time}""",
 }
 
 _config = None
@@ -105,7 +106,7 @@ file_size_limit = {config["file_size_limit"]}
 confirm_tools = [{tools_list}]
 
 # System prompt sent to the model
-# Placeholders: {{cwd}}, {{platform}}, {{date}}
+# Placeholders: {{cwd}}, {{platform}}, {{date}}, {{time}}
 system_prompt = \'\'\'
 {system_prompt}\'\'\'
 
